@@ -7,12 +7,14 @@ namespace Tint.Core.Wallpapers;
 /// <summary>
 /// macOS. Changing the wallpaper rewrites
 /// <c>~/Library/Application Support/com.apple.wallpaper/Store/Index.plist</c>,
-/// which is the signal to look again. The path comes from System Events first
-/// and, when that has none, from Index.plist itself.
+/// which is the signal to look again. The image comes from, in order:
+/// System Events; the file URL inside Index.plist; and, for wallpapers with no
+/// file (built-in extension wallpapers), the snapshot macOS rendered of it.
 /// </summary>
 /// <remarks>
-/// The first run asks for permission for your terminal to control
-/// "System Events" (System Settings → Privacy &amp; Security → Automation).
+/// The first run may ask for permission for your terminal to control
+/// "System Events", and to access data from other apps (the snapshot cache
+/// belongs to the wallpaper service).
 /// </remarks>
 [SupportedOSPlatform("macos")]
 public sealed class MacWallpaperSource(TimeProvider? timeProvider = null) : WatchedWallpaperSource(timeProvider)
@@ -24,9 +26,21 @@ public sealed class MacWallpaperSource(TimeProvider? timeProvider = null) : Watc
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "Library", "Application Support", "com.apple.wallpaper");
 
+    /// <summary>
+    /// Where the wallpaper service keeps rendered snapshots of each wallpaper,
+    /// one folder per provider (<c>extension-&lt;provider id&gt;</c>).
+    /// </summary>
+    private static readonly string SnapshotCacheDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        "Library", "Containers", "com.apple.wallpaper.agent", "Data", "Library", "Caches", "com.apple.wallpaper.caches");
+
     public override string Name => "macOS";
 
     protected override string WatchDirectory => StoreDirectory;
+
+    // A snapshot can land a moment after Index.plist changes; watching the cache
+    // too means that late render still triggers a re-check.
+    protected override IEnumerable<string> ExtraWatchDirectories => [SnapshotCacheDirectory];
 
     public override string? Current()
     {
@@ -43,10 +57,25 @@ public sealed class MacWallpaperSource(TimeProvider? timeProvider = null) : Watc
             return store.File;
         }
 
+        // No image file at all (e.g. macOS 26 extension wallpapers like Neptune,
+        // which are drawn by code): use the snapshot macOS rendered of it.
+        if (store.Provider is not null)
+        {
+            foreach (string folder in SnapshotFolderNames(store.Provider))
+            {
+                string? snapshot = NewestSnapshot(Path.Combine(SnapshotCacheDirectory, folder));
+                if (snapshot is not null)
+                {
+                    OnTrace($"using macOS's rendered snapshot: {snapshot}");
+                    return snapshot;
+                }
+            }
+        }
+
         OnNotice(store.Provider is null
             ? "couldn't find an image file for the current wallpaper."
-            : $"the current wallpaper is {Describe(store.Provider)} — there's no image file to take colours from. " +
-              "Choose a photo or picture as the wallpaper and tint will pick it up.");
+            : $"the current wallpaper is {Describe(store.Provider)}, and macOS hasn't saved a snapshot of it yet — " +
+              "there's nothing to take colours from. Choose a photo or picture as the wallpaper and tint will pick it up.");
         return null;
     }
 

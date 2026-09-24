@@ -47,9 +47,20 @@ tint waits until things are quiet for 400 ms, then checks the wallpaper once and
 reacts only if it actually changed. If the directory to watch doesn't exist,
 it falls back to checking every 2 seconds.
 
-On macOS the first run asks for permission for your terminal to control
-**System Events** (System Settings → Privacy & Security → Automation). macOS's
-built-in wallpapers are HEIC, which tint converts with the system's `sips`.
+On macOS, tint finds the image in this order:
+
+1. **System Events** — works for most photos and pictures.
+2. **`Store/Index.plist`** — the picture's file URL, stored inside a nested
+   `Configuration` plist.
+3. **macOS's rendered snapshot** — for wallpapers with no image file at all,
+   like the macOS 26 extension wallpapers (Neptune…). The wallpaper service
+   keeps full-size renders in
+   `~/Library/Containers/com.apple.wallpaper.agent/…/extension-<provider>/`, and
+   tint uses the newest one. No screen recording needed.
+
+The first run may ask for permission for your terminal to control **System
+Events** and to **access data from other apps** (the snapshot cache belongs to
+the wallpaper service). HEIC images are converted with the system's `sips`.
 
 ## Layout
 

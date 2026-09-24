@@ -14,7 +14,7 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
     private readonly TimeProvider _time;
     private readonly Debouncer _debouncer;
     private readonly Lock _gate = new();
-    private FileSystemWatcher? _watcher;
+    private readonly List<FileSystemWatcher> _watchers = [];
     private ITimer? _poll;
     private string? _last;
     private string? _lastNotice;
@@ -33,6 +33,9 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
     /// <summary>File name filter inside <see cref="WatchDirectory"/>, e.g. "config.ini" or "*".</summary>
     protected virtual string WatchFilter => "*";
 
+    /// <summary>Further directories whose changes should trigger a re-check (all files).</summary>
+    protected virtual IEnumerable<string> ExtraWatchDirectories => [];
+
     public event EventHandler<WallpaperChangedEventArgs>? Changed;
 
     public event Action<string>? Trace;
@@ -47,19 +50,7 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
 
         if (Directory.Exists(WatchDirectory))
         {
-            _watcher = new FileSystemWatcher(WatchDirectory, WatchFilter)
-            {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
-                    | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
-            };
-            _watcher.Changed += OnFileEvent;
-            _watcher.Created += OnFileEvent;
-            _watcher.Deleted += OnFileEvent;
-            _watcher.Renamed += OnFileEvent;
-            _watcher.Error += (_, e) => OnTrace($"watcher error: {e.GetException().Message}");
-            _watcher.EnableRaisingEvents = true;
-            OnTrace($"watching {WatchDirectory}");
+            Watch(WatchDirectory, WatchFilter);
         }
         else
         {
@@ -68,11 +59,27 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
             OnTrace($"{WatchDirectory} not found — checking every {PollInterval.TotalSeconds:0} s instead");
             _poll = _time.CreateTimer(_ => Check(), state: null, PollInterval, PollInterval);
         }
+
+        foreach (string extra in ExtraWatchDirectories)
+        {
+            if (Directory.Exists(extra))
+            {
+                Watch(extra, "*");
+            }
+            else
+            {
+                OnTrace($"{extra} not found — not watching it");
+            }
+        }
     }
 
     public void Dispose()
     {
-        _watcher?.Dispose();
+        foreach (FileSystemWatcher watcher in _watchers)
+        {
+            watcher.Dispose();
+        }
+
         _poll?.Dispose();
         _debouncer.Dispose();
         GC.SuppressFinalize(this);
@@ -112,6 +119,24 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
         }
 
         Changed?.Invoke(this, new WallpaperChangedEventArgs(current));
+    }
+
+    private void Watch(string directory, string filter)
+    {
+        var watcher = new FileSystemWatcher(directory, filter)
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
+                | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
+        };
+        watcher.Changed += OnFileEvent;
+        watcher.Created += OnFileEvent;
+        watcher.Deleted += OnFileEvent;
+        watcher.Renamed += OnFileEvent;
+        watcher.Error += (_, e) => OnTrace($"watcher error: {e.GetException().Message}");
+        watcher.EnableRaisingEvents = true;
+        _watchers.Add(watcher);
+        OnTrace($"watching {directory}");
     }
 
     private void OnFileEvent(object sender, FileSystemEventArgs e)

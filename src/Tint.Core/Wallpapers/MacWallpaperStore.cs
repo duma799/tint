@@ -71,6 +71,45 @@ internal static class MacWallpaperStore
             configuration is null ? null : Convert.FromBase64String(configuration.Value));
     }
 
+    private static readonly string[] SnapshotExtensions = [".bmp", ".png", ".jpg", ".jpeg", ".heic", ".tiff"];
+
+    /// <summary>
+    /// Cache folder names macOS may use for a provider. Extensions use their own
+    /// id (<c>com.apple.NeptuneOneExtension</c>); the built-in picture provider
+    /// <c>com.apple.wallpaper.choice.image</c> caches under
+    /// <c>com.apple.wallpaper.extension.image</c>.
+    /// </summary>
+    internal static IEnumerable<string> SnapshotFolderNames(string provider)
+    {
+        yield return $"extension-{provider}";
+        if (provider.Contains(".choice.", StringComparison.Ordinal))
+        {
+            yield return $"extension-{provider.Replace(".choice.", ".extension.", StringComparison.Ordinal)}";
+        }
+    }
+
+    /// <summary>
+    /// The newest rendered snapshot in a cache folder. macOS draws the current
+    /// wallpaper there (one image per display size), so the most recent one is
+    /// what's on screen now — even for wallpapers with no image file, like the
+    /// macOS 26 extension wallpapers.
+    /// </summary>
+    internal static string? NewestSnapshot(string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return null;
+        }
+
+        return new DirectoryInfo(folder)
+            .EnumerateFiles()
+            .Where(f => SnapshotExtensions.Contains(f.Extension.ToLowerInvariant()) && f.Length > 0)
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .ThenByDescending(f => f.Length) // same moment: prefer the larger (main display) render
+            .Select(f => f.FullName)
+            .FirstOrDefault();
+    }
+
     /// <summary>The first <c>file://</c> URL among the string values, as a local path.</summary>
     internal static string? FindFileUrl(IEnumerable<PlistLeaf> leaves) =>
         leaves
