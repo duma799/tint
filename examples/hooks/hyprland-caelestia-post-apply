@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# tint post-apply hook for Hyprland + Caelestia shell.
+#
+# The setup-specific half of hyprduma-config's pywal.sh. tint itself already
+# writes ~/.cache/wal (kitty, Neovim, your templates) and reloads Hyprland,
+# kitty, GTK dark/light and pywalfox; this does the rest.
+#
+# Install:
+#   mkdir -p ~/.config/tint/hooks
+#   cp examples/hooks/hyprland-caelestia-post-apply ~/.config/tint/hooks/post-apply
+#   chmod +x ~/.config/tint/hooks/post-apply
+#
+# tint passes: TINT_WALLPAPER (image path), TINT_MODE (dark|light), TINT_CACHE (~/.cache/wal).
+
+set -u
+
+cache="${TINT_CACHE:-$HOME/.cache/wal}"
+state="$HOME/.local/state/caelestia"
+
+# Caelestia: which wallpaper is current.
+mkdir -p "$state/wallpaper"
+ln -sf "$TINT_WALLPAPER" "$state/wallpaper/current"
+printf '%s\n' "$TINT_WALLPAPER" > "$state/wallpaper/path.txt"
+
+# Caelestia: colours, rendered by tint from ~/.config/wal/templates/caelestia-scheme.json.
+if [ -f "$cache/caelestia-scheme.json" ]; then
+    cp "$cache/caelestia-scheme.json" "$state/scheme.json"
+fi
+
+# GTK theme from the palette (wal-gtk-theme-git).
+if command -v wal-gtk > /dev/null; then
+    wal-gtk
+fi
+
+# Restart Caelestia so it loads the new scheme. setsid + no output keeps it
+# running after this hook exits.
+if pgrep -x caelestia > /dev/null; then
+    pkill caelestia
+    sleep 0.5
+    setsid caelestia shell -d > /dev/null 2>&1 &
+fi

@@ -1,5 +1,6 @@
 using Tint.Core.Colors;
 using Tint.Core.Palettes;
+using Tint.Core.Themes;
 
 namespace Tint.Cli;
 
@@ -20,6 +21,10 @@ internal static class Terminal
     /// <summary>The whole palette as one row of blocks.</summary>
     public static string Strip(Palette palette, int width = 3) =>
         string.Concat(palette.Swatches.Select(s => Block(s.Color, width)));
+
+    /// <summary>A scheme's 16 colours as one row of blocks.</summary>
+    public static string Strip(Scheme scheme, int width = 2) =>
+        string.Concat(scheme.Colors.Select(c => Block(c, width)));
 
     public static void Log(string message) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
 
