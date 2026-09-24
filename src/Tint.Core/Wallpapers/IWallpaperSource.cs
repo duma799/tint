@@ -17,6 +17,12 @@ public interface IWallpaperSource : IDisposable
     /// <summary>Path of the current wallpaper, or null if it can't be determined.</summary>
     string? Current();
 
+    /// <summary>
+    /// When this source last set a wallpaper, if it can tell. Used to decide
+    /// which of several sources on one machine set the wallpaper on screen.
+    /// </summary>
+    DateTime? LastSetUtc => null;
+
     /// <summary>Raised once per actual change, after bursts of file events have settled.</summary>
     event EventHandler<WallpaperChangedEventArgs>? Changed;
 

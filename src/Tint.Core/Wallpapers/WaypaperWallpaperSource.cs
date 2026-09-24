@@ -14,6 +14,12 @@ public sealed class WaypaperWallpaperSource(string? configPath = null, TimeProvi
 
     public override string Name => "waypaper";
 
+    /// <summary>waypaper's config folder — present when waypaper is installed and has run.</summary>
+    public static string DefaultConfigDirectory =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "waypaper");
+
+    protected override string? StampPath => _configPath;
+
     protected override string WatchDirectory => Path.GetDirectoryName(_configPath)!;
 
     // Editors and waypaper itself often write a temp file then rename it over
