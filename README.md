@@ -1,127 +1,192 @@
 # tint
 
-Colour themes from your wallpaper, for **macOS**. Written in C#.
+Colour themes from your wallpaper, for **macOS**. Native Swift.
 
 Change the wallpaper and tint extracts its palette, builds a readable terminal
-colour scheme from it, and writes it where your setup looks for it — the job
-pywal does, rebuilt with readable-contrast checks and a watcher that
-understands how macOS stores wallpapers, including the built-in ones.
+colour scheme from it, writes it where your setup looks for it, and tells your
+apps to reload — the job pywal does, rebuilt for the Mac: it understands how
+macOS stores wallpapers (built-in ones too), checks every colour for contrast,
+and runs quietly at login.
 
-> **Status:** palette extraction, wallpaper watching and `tint apply`
-> (pywal-compatible output + templates + a post-apply hook) work. Built-in
-> reloads for SketchyBar, JankyBorders and Ghostty are next — see the
-> [roadmap](#roadmap).
+- **Watches the wallpaper**, including the built-in ones that have no image
+  file (Neptune…), and themes from each new one.
+- **Builds a readable 16-colour scheme**: accents matched to their terminal
+  role by hue, every colour checked for contrast (WCAG).
+- **Writes pywal's files** to `~/.cache/wal`, so existing configs keep working,
+  plus Ghostty, WezTerm and **ApolloShell** themes.
+- **Reloads SketchyBar, JankyBorders and Ghostty** itself, then runs your hook.
+- **Runs at login** (`tint service install`); `tint doctor` checks the setup.
+- **A Mac app**: a window to preview and tweak a scheme, and a menu bar item
+  with the current colours and one-click re-theming.
 
 ## Install
 
-Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download): `brew install --cask dotnet-sdk`.
+```sh
+brew tap duma799/tint https://github.com/duma799/tint
+brew install duma799/tint/tint             # the command (full name: Homebrew has another "tint")
+brew install --cask duma799/tint/tint-app  # the app (optional)
+tint service install                       # theme on every wallpaper change, from login
+tint doctor                                # check everything is wired up
+```
+
+One universal build: Apple silicon and Intel, macOS 14 or later.
+
+From source (needs Xcode or its command-line tools):
 
 ```sh
 git clone https://github.com/duma799/tint && cd tint
-dotnet pack src/Tint.Cli -c Release -o ./artifacts
-dotnet tool install --global --add-source ./artifacts tint     # `update` instead of `install` next time
+swift build -c release
+.build/release/tint doctor
+swift run TintApp          # the app
 ```
-
-The command lands in `~/.dotnet/tools`; add that to your `PATH`.
 
 ## Use
 
 ```sh
 tint apply                      # theme from the current wallpaper
 tint apply ~/Pictures/city.jpg  # …or from any image
-tint apply --mode light         # light scheme (also: dark, auto)
-tint watch                      # re-theme on every wallpaper change
+tint apply city.jpg -w          # …and make it the wallpaper too
+tint apply -m light -s 1.2      # light scheme, a bit more colourful
+tint watch                      # re-theme on every wallpaper change (in this terminal)
+tint service install            # …the same, in the background from login
+tint doctor                     # what's set up, what isn't, what to fix
+tint app                        # open the app
 tint palette ~/Pictures/city.jpg
-tint wallpaper                  # print the current wallpaper
+tint wallpaper -v               # print the current wallpaper, and how it was found
 ```
 
-`tint apply` builds a 16-colour scheme from the image — each accent matched to
-its terminal role by hue, and every colour checked for readable contrast
-against the background (WCAG 4.5:1 for text, 7:1 for the foreground) — then:
+`tint apply` builds a 16-colour scheme from the image, then:
 
 1. writes pywal's files to `~/.cache/wal`: `colors.json`, `colors`, `colors.sh`,
-   `colors.css`, `colors-kitty.conf`, `colors-wal.vim`. Anything that already
-   reads them keeps working — e.g. SketchyBar configs reading `colors.json`,
-   JankyBorders reading `colors.sh`, Neovim with pywal.nvim;
+   `colors.css`, `colors-kitty.conf`, `colors-wal.vim` — SketchyBar configs
+   reading `colors.json`, JankyBorders reading `colors.sh`, Neovim with
+   pywal.nvim all keep working — plus `colors-ghostty` and `colors-wezterm.toml`;
 2. renders your pywal templates from `~/.config/wal/templates` (same syntax:
    `{color4}`, `{color4.strip}`, `{{ }}`…);
-3. runs `~/.config/tint/hooks/post-apply` if it exists, with `TINT_WALLPAPER`,
-   `TINT_MODE` and `TINT_CACHE` set — e.g. `sketchybar --reload` until the
-   built-in reloads land.
+3. writes an ApolloShell theme, if ApolloShell is installed;
+4. reloads the apps below, if they're running;
+5. runs `~/.config/tint/hooks/post-apply` if it exists, with `TINT_WALLPAPER`,
+   `TINT_MODE` and `TINT_CACHE` set — for anything else (editor themes…).
 
-## How the watching works
+### Apps it themes
+
+| App | How |
+|---|---|
+| **SketchyBar** | `sketchybar --reload`, which re-runs your `sketchybarrc` |
+| **JankyBorders** | runs `~/.config/borders/bordersrc` (it should read `colors.sh`); without one, sets the active border to color4 and the inactive one to color8. Calling `borders` with options updates the running instance — no restart |
+| **Ghostty** 1.2+ | sends it `SIGUSR2` (reload config). Add to its config: `config-file = ~/.cache/wal/colors-ghostty` |
+| **ApolloShell** | writes `~/Library/Application Support/ApolloShell/themes/tint.css`. Choose **tint** in Nexus → Themes once; ApolloShell re-reads the file on every change |
+| **WezTerm** | nothing to send — it reloads when a watched file changes. In `wezterm.lua`: |
+
+```lua
+local tint = wezterm.home_dir .. '/.cache/wal/colors-wezterm.toml'
+wezterm.add_to_config_reload_watch_list(tint)
+local ok, colors = pcall(wezterm.color.load_scheme, tint)
+if ok then config.colors = colors end
+```
+
+### Settings
+
+`--mode` (dark, light, auto) and `--saturation` (0.5–1.5) default to
+`~/.config/tint/settings.json`, else dark and 1. The app saves them when you
+press Apply, so the login service uses them too.
+
+### The login service
+
+`tint service install` writes `~/Library/LaunchAgents/io.github.duma799.tint.plist`
+and starts it: launchd runs `tint watch` now and at every login, and restarts
+it if it crashes. It gets your shell's `PATH` (launchd's own has no Homebrew)
+and logs to `~/Library/Logs/tint.log`. Also: `tint service status`, `restart`
+(after updating tint), `uninstall`.
+
+If something else themes from an image first — `tint apply -w`, the app —
+the watcher sees the wallpaper is already themed and leaves it.
+
+### The app
+
+The **window** opens on the current wallpaper (or drop in / open any image)
+and shows its palette, the 16-colour scheme and a terminal preview — the whole
+window takes the scheme's colours. Switch dark/light/auto, turn the saturation
+up or down, optionally make the image the wallpaper, and Apply (⌘↩). Click a
+colour to copy it. It also shows whether the login service is on, and turns it
+on.
+
+The **menu bar item** (a drop) shows the current colours, switches the mode,
+and re-themes from the wallpaper in one click.
+
+![The tint app](assets/app.png)
+
+## How the wallpaper is found
 
 Changing the wallpaper rewrites
 `~/Library/Application Support/com.apple.wallpaper/Store/Index.plist`. tint
-watches that folder, waits until the burst of writes has been quiet for 400 ms,
-then checks the wallpaper once and reacts only if it actually changed.
+watches that folder with FSEvents, waits until the burst of writes has been
+quiet for 400 ms, then checks the wallpaper once and reacts only if it
+actually changed. It finds the image in this order:
 
-It finds the image in this order:
-
-1. **System Events** — works for most photos and pictures.
+1. **What macOS reports for the screen** (`NSWorkspace`) — photos and pictures,
+   per display and per space.
 2. **`Store/Index.plist`** — the picture's file URL, stored inside a nested
    `Configuration` plist.
 3. **macOS's rendered snapshot** — for wallpapers with no image file at all,
    like the macOS 26 extension wallpapers (Neptune…). The wallpaper service
    keeps full-size renders in
    `~/Library/Containers/com.apple.wallpaper.agent/…/extension-<provider>/`, and
-   tint uses the newest one. No screen recording needed.
+   tint uses the newest one.
 
-The first run may ask for permission for your terminal to control **System
-Events** and to **access data from other apps** (the snapshot cache belongs to
-the wallpaper service). HEIC images are converted with the system's `sips`.
+No AppleScript and no screen recording. Reading the snapshot cache may make
+macOS ask once to let tint **access data from other apps**.
 
 ## Layout
 
 ```
-src/
-  Tint.Core/         no UI
+Sources/
+  TintCore/          no UI; builds and is tested on Linux too
     Colors/          Rgb, Lab (CIELAB), WCAG contrast
-    Palettes/        k-means clustering, PaletteExtractor
-    Themes/          SchemeBuilder: palette → 16-colour scheme
-    Output/          pywal-compatible files, template renderer
-    Reload/          post-apply hook (app reloads to come)
-    Imaging/         image loading (+ HEIC via sips)
-    Wallpapers/      macOS wallpaper watching and lookup
-  Tint.Cli/          the `tint` command
-tests/
-  Tint.Core.Tests/   xUnit
+    Palettes/        k-means clustering, palette extraction
+    Imaging/         ImageIO decoding (HEIC included)
+    Themes/          SchemeBuilder: palette → readable 16-colour scheme
+    Output/          pywal files, templates, Ghostty/WezTerm/ApolloShell themes
+    Reload/          SketchyBar, JankyBorders, Ghostty, the hook
+    Wallpapers/      FSEvents watcher, wallpaper lookup and setting
+    Service/         the launchd agent
+    Diagnostics/     tint doctor
+  tint/              the command (swift-argument-parser)
+  TintApp/           the SwiftUI app: window + menu bar item
+Tests/TintCoreTests/ Swift Testing
+scripts/
+  package.sh         universal release files
+  homebrew.sh        the formula and cask for a release
 ```
 
 ### Palette extraction
 
-The image is shrunk so its long side is at most 256 px, every pixel is
-converted to CIELAB — a colour space where distance matches how different
-colours *look* — and k-means groups them into 16 clusters. Each cluster's
-average is a palette colour, and its size is how much of the image it covers.
-Seeding is fixed, so the same image always yields the same palette.
+The image is decoded straight to a thumbnail whose long side is at most
+256 px, every pixel is converted to CIELAB — a colour space where distance
+matches how different colours *look* — and k-means groups them into 16
+clusters. Each cluster's average is a palette colour, and its size is how much
+of the image it covers. Seeding is fixed, so the same image always yields the
+same palette.
 
 ## Development
 
 ```sh
-dotnet build
-dotnet test
-dotnet format          # fix formatting; CI runs it with --verify-no-changes
+swift build
+swift test
 ```
 
-CI builds and tests on macOS for every pull request.
+CI builds (warnings as errors) and tests on macOS, and runs the core tests on
+Linux, for every pull request. The Release workflow builds the universal Mac
+files too (attached to the run). Merging a new version
+(`Sources/TintCore/Version.swift`) into main publishes release `vX.Y.Z` and
+updates the Homebrew formula and cask.
 
-## Roadmap
-
-1. ~~**Core** — palette extraction, macOS wallpaper watching (photos, plist, built-in snapshots)~~
-2. **Themes** — ~~scheme with contrast checks, pywal-compatible output,
-   templates, `tint apply`, hooks~~; built-in reloads for SketchyBar,
-   JankyBorders, Ghostty
-3. **Service** — `tint service install` (LaunchAgent), `tint doctor`
-4. **Desktop app** — pick a wallpaper, preview, tweak, apply
-5. **More** — WezTerm, Zed, VS Code; `tint back`
-6. **Releases** — native binary, Homebrew tap, `dotnet tool install -g tint` from NuGet
+tint was first written in C# (0.1–0.4); that version is on the
+[`csharp`](https://github.com/duma799/tint/tree/csharp) branch, and the last
+Linux-supporting one on [`linux-0.2.0`](https://github.com/duma799/tint/tree/linux-0.2.0).
 
 ## License
 
 [GPL-3.0-or-later](LICENSE). You can use, study, change and share tint; if you
 distribute a modified version, its source must be available under the same
 license.
-
-Images are decoded with [ImageSharp](https://github.com/SixLabors/ImageSharp)
-(Six Labors Split License — Apache-2.0 for open-source projects like this one).

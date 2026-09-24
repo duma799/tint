@@ -9,21 +9,91 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
-
-      - uses: actions/setup-dotnet@v5
         with:
-          global-json-file: global.json
+          persist-credentials: false
 
-      - run: dotnet restore
+      - name: Swift version
+        run: swift --version
 
-      - name: Check formatting
-        run: dotnet format --verify-no-changes --no-restore
+      - name: Build (warnings are errors)
+        run: swift build -Xswiftc -warnings-as-errors
 
-      - run: dotnet build --configuration Release --no-restore
+      - name: Test
+        run: swift test
 
-      - run: dotnet test --configuration Release --no-build
+      # Many Macs have only the Command Line Tools, not full Xcode; some
+      # SwiftUI macros (@State…) only ship with Xcode. Build that way too.
+      - name: Build with the Command Line Tools only
+        run: |
+          if [ -d /Library/Developer/CommandLineTools ]; then
+            DEVELOPER_DIR=/Library/Developer/CommandLineTools swift build --scratch-path .build-clt
+          else
+            echo "no Command Line Tools on this runner; skipped"
+          fi
+
+      - name: Smoke test the command
+        run: |
+          .build/debug/tint --version
+          .build/debug/tint palette assets/icon.png
+          .build/debug/tint apply assets/icon.png --no-reload
+          .build/debug/tint wallpaper -v || true
+          .build/debug/tint doctor || true
+
+      # The login service's job, end to end: a long-running `tint watch` must
+      # see every wallpaper change, not only the first.
+      - name: Watch sees repeated wallpaper changes
+        run: |
+          for n in 1 2 3; do sips -r $((n * 90)) -s format jpeg assets/icon.png --out "$RUNNER_TEMP/wall$n.jpg" > /dev/null; done
+          .build/debug/tint watch -v > "$RUNNER_TEMP/watch.log" 2>&1 &
+          sleep 4
+          for n in 1 2 3; do
+            .build/debug/tint apply "$RUNNER_TEMP/wall$n.jpg" -w --no-reload > /dev/null
+            sleep 4
+          done
+          kill %1 || true
+          cat "$RUNNER_TEMP/watch.log"
+          test "$(grep -c 'wallpaper changed' "$RUNNER_TEMP/watch.log")" -ge 3
+
+  # The core (colour maths, output, store parsing…) has no macOS calls in
+  # its tests, so they run on Linux too.
+  linux:
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - run: swift test
+
+  # Opens the real app on a real wallpaper and takes a picture of it
+  # (attached to the run as "screenshot").
+  screenshot:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - run: swift build --product TintApp
+
+      - name: Screenshot
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/koi.jpg" https://raw.githubusercontent.com/duma799/yabai-config/main/backgrounds/koi.jpg
+          TINT_APP_IMAGE="$RUNNER_TEMP/koi.jpg" .build/debug/TintApp &
+          sleep 12
+          screencapture -x "$RUNNER_TEMP/screen.png"
+          kill %1 || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshot
+          path: ${{ runner.temp }}/screen.png
