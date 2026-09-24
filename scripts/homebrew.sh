@@ -55,7 +55,7 @@ cask "tint-app" do
   desc "Pick a wallpaper, preview its colour scheme, tweak it and apply it"
   homepage "https://github.com/duma799/tint"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: ">= :sequoia"
 
   app "Tint.app"
 

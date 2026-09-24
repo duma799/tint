@@ -1,16 +1,29 @@
 #if os(macOS)
 import AppKit
 import Observation
+import ServiceManagement
 import TintCore
 
-enum ModeChoice: String, CaseIterable, Identifiable {
-    case dark, light, auto
+extension ModePreference: @retroactive Identifiable {
+    public var id: Self { self }
 
-    var id: Self { self }
-    var label: String { rawValue.capitalized }
-    var themeMode: ThemeMode? { self == .auto ? nil : ThemeMode(rawValue: rawValue) }
+    var label: String {
+        switch self {
+        case .dark: "Dark"
+        case .light: "Light"
+        case .auto: "Image"
+        case .system: "System"
+        }
+    }
 
-    init(_ mode: ThemeMode?) { self = mode.flatMap { ModeChoice(rawValue: $0.rawValue) } ?? .auto }
+    var help: String {
+        switch self {
+        case .dark: "Always a dark scheme"
+        case .light: "Always a light scheme"
+        case .auto: "Dark or light, from the image's brightness"
+        case .system: "Follow macOS's appearance, and switch when it does"
+        }
+    }
 }
 
 /// Everything the window and the menu bar show: the chosen image, its
@@ -21,7 +34,7 @@ final class AppModel {
     var imagePath: String?
     var image: NSImage?
     var palette: Palette?
-    var mode: ModeChoice
+    var mode: ModePreference
     var saturation: Double
     var setAsWallpaper = false
     /// The "Open image…" file picker is showing.
@@ -31,17 +44,43 @@ final class AppModel {
     var currentWallpaper: String?
     var service: ServiceStatus?
 
+    /// macOS's appearance now, for the "System" mode; kept current below.
+    var systemIsDark = SystemAppearance.isDark()
+
+    /// Whether the app opens at login (as a menu bar item, without its window).
+    var openAtLogin = SMAppService.mainApp.status == .enabled
+
+    @ObservationIgnored private var appearanceObserver: (any NSObjectProtocol)?
+
     init() {
         let saved = TintSettings.load()
-        mode = ModeChoice(saved.mode)
+        mode = saved.mode
         saturation = saved.saturation
+        appearanceObserver = DistributedNotificationCenter.default().addObserver(
+            forName: SystemAppearance.changedNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.systemIsDark = SystemAppearance.isDark() }
+        }
+    }
+
+    func setOpenAtLogin(_ on: Bool) {
+        do {
+            if on {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            status = on ? "✓ tint opens at login, in the menu bar." : "tint no longer opens at login."
+        } catch {
+            status = "Couldn't change it: \(error.localizedDescription) — is Tint in Applications?"
+        }
+        openAtLogin = SMAppService.mainApp.status == .enabled
     }
 
     /// The scheme for the current image and knobs; nil until an image is loaded.
     var scheme: Scheme? {
         guard let palette else { return nil }
-        let resolved = mode.themeMode ?? (palette.isDark ? .dark : .light)
-        return try? SchemeBuilder.build(palette, mode: resolved, saturation: roundedSaturation)
+        return try? SchemeBuilder.build(palette, mode: mode.resolve(for: palette) { self.systemIsDark }, saturation: roundedSaturation)
     }
 
     var roundedSaturation: Double { (saturation * 20).rounded() / 20 }
@@ -101,7 +140,7 @@ final class AppModel {
         defer { busy = false }
         status = "Applying…"
 
-        let settings = TintSettings(mode: mode.themeMode, saturation: roundedSaturation)
+        let settings = TintSettings(mode: mode, saturation: roundedSaturation)
         let setWallpaper = setAsWallpaper && canSetWallpaper
         do {
             let result = try await Task.detached {

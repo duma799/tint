@@ -49,6 +49,19 @@ struct Watch: ParsableCommand {
         }
 
         watcher.start()
+
+        // In system mode, re-theme the same wallpaper when macOS switches
+        // between dark and light (by hand, or by itself at sunset).
+        #if os(macOS)
+        Appearance.observer = DistributedNotificationCenter.default().addObserver(
+            forName: SystemAppearance.changedNotification, object: nil, queue: nil
+        ) { _ in
+            let options = ApplyOptions.resolved(mode: mode, saturation: saturation)
+            guard apply, options.mode == .system, let path = ThemeApplier.lastApplied() else { return }
+            Terminal.log("macOS switched to \(SystemAppearance.isDark() ? "dark" : "light") mode")
+            watcher.queue.async { _ = Apply.run(path, options, compact: true) }
+        }
+        #endif
         let what = apply ? "applying a theme on each change" : "preview only (--no-apply)"
         Terminal.log("watching for wallpaper changes, \(what) — Ctrl+C to stop")
         Terminal.log("current: \(MacWallpaper.current().path ?? "unknown")")
@@ -97,4 +110,8 @@ final class Notices: @unchecked Sendable {
 
 enum Signals {
     nonisolated(unsafe) static var keep: [any DispatchSourceSignal] = []
+}
+
+enum Appearance {
+    nonisolated(unsafe) static var observer: (any NSObjectProtocol)?
 }

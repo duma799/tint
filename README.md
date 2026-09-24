@@ -13,7 +13,10 @@ and runs quietly at login.
 - **Builds a readable 16-colour scheme**: accents matched to their terminal
   role by hue, every colour checked for contrast (WCAG).
 - **Writes pywal's files** to `~/.cache/wal`, so existing configs keep working,
-  plus Ghostty, WezTerm and **ApolloShell** themes.
+  plus Ghostty, WezTerm and **ApolloShell** themes, and **Zed, VS Code,
+  Antigravity and Gemini CLI** themes.
+- **Follows macOS dark/light mode** if you like (`--mode system`), re-theming
+  the moment macOS switches.
 - **Reloads SketchyBar, JankyBorders and Ghostty** itself, then runs your hook.
 - **Runs at login** (`tint service install`); `tint doctor` checks the setup.
 - **A Mac app**: a window to preview and tweak a scheme, and a menu bar item
@@ -29,7 +32,7 @@ tint service install                       # theme on every wallpaper change, fr
 tint doctor                                # check everything is wired up
 ```
 
-One universal build: Apple silicon and Intel, macOS 14 or later.
+One universal build: Apple silicon and Intel, macOS 15 or later.
 
 From source (needs Xcode or its command-line tools):
 
@@ -47,6 +50,7 @@ tint apply                      # theme from the current wallpaper
 tint apply ~/Pictures/city.jpg  # …or from any image
 tint apply city.jpg -w          # …and make it the wallpaper too
 tint apply -m light -s 1.2      # light scheme, a bit more colourful
+tint apply -m system            # dark or light, following macOS
 tint watch                      # re-theme on every wallpaper change (in this terminal)
 tint service install            # …the same, in the background from login
 tint doctor                     # what's set up, what isn't, what to fix
@@ -63,7 +67,7 @@ tint wallpaper -v               # print the current wallpaper, and how it was fo
    pywal.nvim all keep working — plus `colors-ghostty` and `colors-wezterm.toml`;
 2. renders your pywal templates from `~/.config/wal/templates` (same syntax:
    `{color4}`, `{color4.strip}`, `{{ }}`…);
-3. writes an ApolloShell theme, if ApolloShell is installed;
+3. writes an ApolloShell theme and editor themes, for whichever are installed;
 4. reloads the apps below, if they're running;
 5. runs `~/.config/tint/hooks/post-apply` if it exists, with `TINT_WALLPAPER`,
    `TINT_MODE` and `TINT_CACHE` set — for anything else (editor themes…).
@@ -76,6 +80,9 @@ tint wallpaper -v               # print the current wallpaper, and how it was fo
 | **JankyBorders** | runs `~/.config/borders/bordersrc` (it should read `colors.sh`); without one, sets the active border to color4 and the inactive one to color8. Calling `borders` with options updates the running instance — no restart |
 | **Ghostty** 1.2+ | sends it `SIGUSR2` (reload config). Add to its config: `config-file = ~/.cache/wal/colors-ghostty` |
 | **ApolloShell** | writes `~/Library/Application Support/ApolloShell/themes/tint.css`. Choose **tint** in Nexus → Themes once; ApolloShell re-reads the file on every change |
+| **Zed** | writes `~/.config/zed/themes/tint.json` and points your settings' `theme.dark` (or `light`) at **Tint** |
+| **VS Code**, **Antigravity** | sets `workbench.colorCustomizations` and `editor.tokenColorCustomizations` in the user `settings.json`, keeping everything else (a file with comments is left alone, with a note) |
+| **Gemini CLI** | adds and selects a **Tint** custom theme in `~/.gemini/settings.json` |
 | **WezTerm** | nothing to send — it reloads when a watched file changes. In `wezterm.lua`: |
 
 ```lua
@@ -87,7 +94,8 @@ if ok then config.colors = colors end
 
 ### Settings
 
-`--mode` (dark, light, auto) and `--saturation` (0.5–1.5) default to
+`--mode` (dark, light, auto from the image, or system to follow macOS) and
+`--saturation` (0.5–1.5) default to
 `~/.config/tint/settings.json`, else dark and 1. The app saves them when you
 press Apply, so the login service uses them too.
 
@@ -98,6 +106,9 @@ and starts it: launchd runs `tint watch` now and at every login, and restarts
 it if it crashes. It gets your shell's `PATH` (launchd's own has no Homebrew)
 and logs to `~/Library/Logs/tint.log`. Also: `tint service status`, `restart`
 (after updating tint), `uninstall`.
+
+In **system** mode the watcher also listens for macOS switching between dark
+and light (by hand, or by itself at sunset) and re-themes the same wallpaper.
 
 If something else themes from an image first — `tint apply -w`, the app —
 the watcher sees the wallpaper is already themed and leaves it.
@@ -113,6 +124,9 @@ on.
 
 The **menu bar item** (a drop) shows the current colours, switches the mode,
 and re-themes from the wallpaper in one click.
+
+**Open at login** (in the window or the menu bar) starts tint with your Mac,
+as a menu bar item only; open the window from there.
 
 ![The tint app](assets/app.png)
 

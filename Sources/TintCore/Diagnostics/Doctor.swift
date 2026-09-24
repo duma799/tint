@@ -31,6 +31,7 @@ public enum Doctor {
         checks.append(ghostty())
         checks.append(wezterm())
         checks.append(apolloShell())
+        checks.append(editors())
         checks.append(templates())
         checks.append(hook())
         #if os(macOS)
@@ -97,6 +98,19 @@ public enum Doctor {
         return TintPaths.exists(themes + "/" + ApolloShellTheme.fileName)
             ? Check(name: "ApolloShell", status: .ok, detail: "tint.css is written on every apply — pick \"tint\" in Nexus → Themes")
             : Check(name: "ApolloShell", status: .warning, detail: "installed; run `tint apply` to write its tint theme")
+    }
+
+    static func editors() -> Check {
+        let paths = EditorThemes.Paths()
+        let found = [
+            ("Zed", TintPaths.isDirectory(paths.zed)),
+            ("VS Code", TintPaths.exists(paths.vscode + "/settings.json")),
+            ("Antigravity", TintPaths.exists(paths.antigravity + "/settings.json")),
+            ("Gemini CLI", TintPaths.isDirectory(paths.gemini)),
+        ].filter(\.1).map(\.0)
+        return found.isEmpty
+            ? Check(name: "editors", status: .info, detail: "none found (Zed, VS Code, Antigravity, Gemini CLI)")
+            : Check(name: "editors", status: .ok, detail: "themed on every apply: \(found.joined(separator: ", ")) — pick \"Tint\" in Zed once")
     }
 
     static func templates() -> Check {

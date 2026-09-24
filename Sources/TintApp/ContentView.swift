@@ -94,10 +94,12 @@ struct ContentView: View {
 
             SectionLabel("Mode")
             Picker("Mode", selection: $model.mode) {
-                ForEach(ModeChoice.allCases) { Text($0 == .auto ? "Auto (from the image)" : $0.label).tag($0) }
+                ForEach(ModePreference.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            Text(model.mode.help + (model.mode == .system ? " (now \(model.systemIsDark ? "dark" : "light"))." : "."))
+                .font(.system(size: 11)).opacity(0.5)
 
             HStack {
                 SectionLabel("Saturation")
@@ -120,6 +122,11 @@ struct ContentView: View {
                 .font(.system(size: 11)).opacity(0.5)
 
             ServiceRow(model: model)
+
+            Toggle("Open tint at login (menu bar only)", isOn: Binding(
+                get: { model.openAtLogin },
+                set: { model.setOpenAtLogin($0) }))
+                .font(.system(size: 12))
 
             if !model.status.isEmpty {
                 Text(model.status)

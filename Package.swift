@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "tint",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v15)],
     products: [
         .executable(name: "tint", targets: ["tint"]),
         .executable(name: "TintApp", targets: ["TintApp"]),
