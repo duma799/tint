@@ -7,13 +7,28 @@ namespace Tint.Core.Wallpapers;
 /// Reads macOS's wallpaper store (<c>Index.plist</c>, converted to XML). Plain
 /// parsing with no macOS calls, so it is unit-tested on every platform.
 /// </summary>
+/// <remarks>
+/// Shape on macOS 26, per desktop "choice":
+/// <code>
+/// AllSpacesAndDisplays/Desktop/Content/Choices[0]/
+///     Provider       "com.apple.wallpaper.choice.image"
+///     Files          []            ← empty, even for a picture
+///     Configuration  &lt;data&gt;  ← a second, nested binary plist holding the file URL
+/// </code>
+/// </remarks>
 internal static class MacWallpaperStore
 {
-    /// <summary>The desktop wallpaper found in Index.plist: its image file, if any, and its provider id.</summary>
-    internal sealed record StoreChoice(string? File, string? Provider);
+    /// <summary>
+    /// The desktop wallpaper found in Index.plist: its image file if listed
+    /// directly, its provider id, and the raw nested configuration plist.
+    /// </summary>
+    internal sealed record StoreChoice(string? File, string? Provider, byte[]? Configuration = null);
 
-    /// <summary>One string value in a plist, with the key path leading to it.</summary>
-    internal sealed record PlistLeaf(string Path, string Key, string Value);
+    /// <summary>
+    /// One value in a plist with the key path leading to it. Strings are stored
+    /// as-is; <c>&lt;data&gt;</c> as base64 with <see cref="IsData"/> set.
+    /// </summary>
+    internal sealed record PlistLeaf(string Path, string Key, string Value, bool IsData = false);
 
     /// <summary>
     /// Picks the desktop (not screen saver) wallpaper. Settings applied to all
@@ -37,16 +52,33 @@ internal static class MacWallpaperStore
                 .Select(x => x.leaf),
         ];
 
-        string? file = desktop
-            .Where(l => l.Key == "relative" && l.Value.StartsWith("file://", StringComparison.Ordinal))
-            .Select(l => new Uri(l.Value).LocalPath)
-            .FirstOrDefault();
-        string? provider = desktop.FirstOrDefault(l => l.Key == "Provider")?.Value;
+        PlistLeaf? provider = desktop.FirstOrDefault(l => l.Key == "Provider" && !l.IsData);
+        if (provider is null)
+        {
+            return new StoreChoice(null, null);
+        }
 
-        return new StoreChoice(file, provider);
+        // Everything else must come from the same choice as the provider.
+        string choice = provider.Path[..provider.Path.LastIndexOf('/')] + "/";
+        PlistLeaf[] own = [.. desktop.Where(l => l.Path.StartsWith(choice, StringComparison.Ordinal))];
+
+        string? file = FindFileUrl(own.Where(l => l.Key == "relative"));
+        PlistLeaf? configuration = own.FirstOrDefault(l => l.Key == "Configuration" && l.IsData && l.Value.Length > 0);
+
+        return new StoreChoice(
+            file,
+            provider.Value,
+            configuration is null ? null : Convert.FromBase64String(configuration.Value));
     }
 
-    /// <summary>Flattens an XML plist into its string values, e.g. <c>AllSpacesAndDisplays/Desktop/Content/Choices[0]/Provider</c>.</summary>
+    /// <summary>The first <c>file://</c> URL among the string values, as a local path.</summary>
+    internal static string? FindFileUrl(IEnumerable<PlistLeaf> leaves) =>
+        leaves
+            .Where(l => !l.IsData && l.Value.StartsWith("file://", StringComparison.Ordinal))
+            .Select(l => new Uri(l.Value).LocalPath)
+            .FirstOrDefault();
+
+    /// <summary>Flattens an XML plist into its values, e.g. <c>AllSpacesAndDisplays/Desktop/Content/Choices[0]/Provider</c>.</summary>
     internal static IReadOnlyList<PlistLeaf> FlattenPlist(string xml)
     {
         // Plists start with a DOCTYPE; DTD processing is off by default for
@@ -70,6 +102,11 @@ internal static class MacWallpaperStore
         {
             case "string":
                 leaves.Add(new PlistLeaf(path, key, element.Value));
+                break;
+
+            case "data":
+                // Base64, wrapped across lines by plutil.
+                leaves.Add(new PlistLeaf(path, key, string.Concat(element.Value.Where(c => !char.IsWhiteSpace(c))), IsData: true));
                 break;
 
             case "dict":

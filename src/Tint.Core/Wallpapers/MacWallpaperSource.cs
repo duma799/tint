@@ -75,17 +75,49 @@ public sealed class MacWallpaperSource(TimeProvider? timeProvider = null) : Watc
             return new StoreChoice(null, null);
         }
 
-        // Index.plist is a binary plist; plutil (built into macOS) turns it into XML.
-        ProcessResult xml = ProcessRunner.Run("plutil", ["-convert", "xml1", "-o", "-", index]);
-        if (!xml.Succeeded)
+        string? xml = PlistToXml(index);
+        if (xml is null)
         {
-            OnTrace($"plutil failed: {xml.StdErr}");
             return new StoreChoice(null, null);
         }
 
-        StoreChoice choice = PickDesktopChoice(FlattenPlist(xml.StdOut));
+        StoreChoice choice = PickDesktopChoice(FlattenPlist(xml));
+
+        // A picture's path isn't in "Files" but in "Configuration": a second
+        // binary plist nested inside the first. Unpack that one too.
+        if (choice.File is null && choice.Configuration is { Length: > 0 } configuration)
+        {
+            string temp = Path.Combine(Path.GetTempPath(), $"tint-{Guid.NewGuid():N}.plist");
+            try
+            {
+                File.WriteAllBytes(temp, configuration);
+                string? nested = PlistToXml(temp);
+                if (nested is not null)
+                {
+                    choice = choice with { File = FindFileUrl(FlattenPlist(nested)) };
+                }
+            }
+            finally
+            {
+                File.Delete(temp);
+            }
+        }
+
         OnTrace($"Index.plist → file: {choice.File ?? "none"}, provider: {choice.Provider ?? "none"}");
         return choice;
+    }
+
+    /// <summary>Binary plist → XML, via plutil (built into macOS).</summary>
+    private string? PlistToXml(string path)
+    {
+        ProcessResult result = ProcessRunner.Run("plutil", ["-convert", "xml1", "-o", "-", path]);
+        if (!result.Succeeded)
+        {
+            OnTrace($"plutil failed on {Path.GetFileName(path)}: {result.StdErr}");
+            return null;
+        }
+
+        return result.StdOut;
     }
 
     private static string Describe(string provider) => provider switch
