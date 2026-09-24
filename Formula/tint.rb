@@ -2,9 +2,9 @@
 class Tint < Formula
   desc "Colour themes from your wallpaper, for macOS"
   homepage "https://github.com/duma799/tint"
-  url "https://github.com/duma799/tint/releases/download/v0.5.0/tint-0.5.0-macos.tar.gz"
-  version "0.5.0"
-  sha256 "bee28b3deb0a4f90ea1320ee31ae28e2cd79481db234d14ee9ecfa9938666bc8"
+  url "https://github.com/duma799/tint/releases/download/v0.6.0/tint-0.6.0-macos.tar.gz"
+  version "0.6.0"
+  sha256 "21a4c9c34ddd248df2d1b4864074ea3575deb1205dd42b2d14b6e737fb711e49"
   license "GPL-3.0-or-later"
 
   depends_on :macos
