@@ -63,6 +63,26 @@ struct SchemeTests {
         #expect(throws: SchemeBuilder.BuildError.self) { try SchemeBuilder.build(Self.night, mode: .dark, saturation: .nan) }
     }
 
+    @Test(arguments: ThemeMode.allCases)
+    func backgroundTakesTheMainColourNotASmallDarkPatch(mode: ThemeMode) throws {
+        // 70% blue sky, a little white cloud, and a small patch of dark green trees.
+        let sky = Palette(swatches: [
+            Swatch(color: Rgb(hex: "#4a7fd0")!, share: 0.7),
+            Swatch(color: Rgb(hex: "#e8eef6")!, share: 0.2),
+            Swatch(color: Rgb(hex: "#1c3a1a")!, share: 0.1),
+        ])
+        let background = try SchemeBuilder.build(sky, mode: mode).background.lab
+        #expect(background.hue > 230 && background.hue < 320, "hue \(background.hue)")
+    }
+
+    @Test func aGreyImageGetsANeutralBackground() throws {
+        let grey = Palette(swatches: [
+            Swatch(color: Rgb(hex: "#777777")!, share: 0.9),
+            Swatch(color: Rgb(hex: "#d03030")!, share: 0.1),
+        ])
+        #expect(try SchemeBuilder.build(grey, mode: .dark).background.lab.chroma < 4)
+    }
+
     @Test func lightThemesKeepANavyBlueFromLookingBlack() throws {
         let s = try SchemeBuilder.build(palette("#10142e", "#1b2233", "#f4e9dc", "#2c255c"), mode: .light)
         #expect(s[4].lab.l >= 30)

@@ -34,16 +34,23 @@ public enum SchemeBuilder {
         let darkest = labs.min { $0.l < $1.l }!
         let lightest = labs.max { $0.l < $1.l }!
 
-        // Background and foreground keep a hint of the image's tint, but only a
-        // hint: strongly coloured backgrounds make every other colour muddy.
-        let backgroundLab = dark
-            ? darkest.withLightness(min(darkest.l, 12)).withMaxChroma(12)
-            : lightest.withLightness(max(lightest.l, 94)).withMaxChroma(8)
+        // Background and foreground are tinted with the image's overall
+        // colour — dominated by what covers most of the image —
+        // not with whichever colour happens to be darkest or lightest: a
+        // mostly blue photo with a patch of dark trees gets a blue-black
+        // background, not a green one, and a mostly grey image stays neutral.
+        // Only a hint of it, though: strongly coloured backgrounds make every
+        // other colour muddy.
+        let tint = overallTint(palette)
+        let backgroundL = dark ? min(darkest.l, 12) : max(lightest.l, 94)
+        let backgroundChroma = min(tint.chroma * 0.6, dark ? 14 : 8, max(backgroundL, 8))
+        let backgroundLab = Lab.lch(l: backgroundL, chroma: backgroundChroma, hue: tint.hue)
         let background = backgroundLab.rgb
 
-        let foregroundLab = dark
-            ? lightest.withLightness(max(lightest.l, 88)).withMaxChroma(10)
-            : darkest.withLightness(min(darkest.l, 22)).withMaxChroma(12)
+        let foregroundLab = Lab.lch(
+            l: dark ? max(lightest.l, 88) : min(darkest.l, 22),
+            chroma: min(tint.chroma * 0.4, dark ? 8 : 12),
+            hue: tint.hue)
         let foreground = readable(foregroundLab, on: background, ratio: Contrast.enhanced, lighten: dark)
 
         // Accents stay in a mid-lightness band, so none reads as black (on a
@@ -115,6 +122,22 @@ public enum SchemeBuilder {
         return (0..<6).map { slot in
             accents[slot] ?? Lab.lch(l: lightness, chroma: chroma, hue: slotHues[slot])
         }
+    }
+
+    /// The image's overall colour (a and b; lightness ignored): the average
+    /// of its swatches weighted by their share *squared*, so the big areas
+    /// decide — four small pastel stripes don't outvote a navy sky — while a
+    /// mostly grey image still comes out (nearly) neutral.
+    static func overallTint(_ palette: Palette) -> Lab {
+        var a = 0.0, b = 0.0, total = 0.0
+        for swatch in palette.swatches {
+            let lab = swatch.lab
+            let weight = swatch.share * swatch.share
+            a += lab.a * weight
+            b += lab.b * weight
+            total += weight
+        }
+        return total > 0 ? Lab(l: 50, a: a / total, b: b / total) : Lab(l: 50, a: 0, b: 0)
     }
 
     /// Moves `color` lighter (dark themes) or darker (light themes) until it
