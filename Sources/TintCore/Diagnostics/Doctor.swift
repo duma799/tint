@@ -110,7 +110,7 @@ public enum Doctor {
         ].filter(\.1).map(\.0)
         return found.isEmpty
             ? Check(name: "editors", status: .info, detail: "none found (Zed, VS Code, Antigravity, Gemini CLI)")
-            : Check(name: "editors", status: .ok, detail: "themed on every apply: \(found.joined(separator: ", ")) — pick \"Tint\" in Zed once")
+            : Check(name: "editors", status: .ok, detail: "themed on every apply: \(found.joined(separator: ", ")) — \"Tint\" theme in Zed and VS Code")
     }
 
     static func templates() -> Check {

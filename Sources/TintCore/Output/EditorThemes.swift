@@ -14,6 +14,8 @@ public enum EditorThemes {
         var zed: String { home + "/.config/zed" }
         var vscode: String { home + "/Library/Application Support/Code/User" }
         var antigravity: String { home + "/Library/Application Support/Antigravity/User" }
+        var vscodeExtensions: String { home + "/.vscode/extensions" }
+        var antigravityExtensions: String { home + "/.antigravity/extensions" }
         var gemini: String { home + "/.gemini" }
     }
 
@@ -34,8 +36,8 @@ public enum EditorThemes {
             }
         }
         attempt("Zed") { try zed(scheme, folder: paths.zed) }
-        attempt("VS Code") { try vscode(scheme, folder: paths.vscode) }
-        attempt("Antigravity") { try vscode(scheme, folder: paths.antigravity) }
+        attempt("VS Code") { try vscode(scheme, folder: paths.vscode, extensions: paths.vscodeExtensions) }
+        attempt("Antigravity") { try vscode(scheme, folder: paths.antigravity, extensions: paths.antigravityExtensions) }
         attempt("Gemini CLI") { try gemini(scheme, folder: paths.gemini) }
         return result
     }
@@ -180,19 +182,101 @@ public enum EditorThemes {
 
     // MARK: VS Code (and Antigravity)
 
-    /// `workbench.colorCustomizations` and `editor.tokenColorCustomizations`
-    /// in the user settings; every other setting is kept.
-    static func vscode(_ scheme: Scheme, folder: String) throws -> [String] {
+    /// A "Tint" colour theme, installed as a tiny local extension so it's in
+    /// the theme picker, selected in the user settings. The same colours also
+    /// go in `workbench.colorCustomizations` / `editor.tokenColorCustomizations`:
+    /// VS Code applies those the moment the file changes, with no reload.
+    /// Every other setting is kept.
+    static func vscode(_ scheme: Scheme, folder: String, extensions: String) throws -> [String] {
         let path = folder + "/settings.json"
         guard let data = FileManager.default.contents(atPath: path) else { return [] }
         guard var settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw Failure.notJSON(path)
         }
+
+        var written: [String] = []
+        if TintPaths.isDirectory(extensions) {
+            written += try vscodeExtension(scheme, extensions: extensions)
+            settings["workbench.colorTheme"] = themeName
+        }
+
         let (workbench, tokens) = vscodeColors(scheme)
         settings["workbench.colorCustomizations"] = workbench
         settings["editor.tokenColorCustomizations"] = tokens
         try writeJSON(settings, to: path)
-        return [path]
+        return written + [path]
+    }
+
+    static let extensionID = "duma799.tint-theme"
+    static let extensionVersion = "1.0.0"
+
+    /// `<extensions>/duma799.tint-theme-1.0.0/`: a package.json that
+    /// contributes the theme, and the theme itself. Also listed in the
+    /// editor's extensions.json, which newer versions read to know what's installed.
+    static func vscodeExtension(_ scheme: Scheme, extensions: String) throws -> [String] {
+        let folderName = "\(extensionID)-\(extensionVersion)"
+        let folder = extensions + "/" + folderName
+        try FileManager.default.createDirectory(atPath: folder + "/themes", withIntermediateDirectories: true)
+
+        let dark = scheme.mode == .dark
+        let manifest: [String: Any] = [
+            "name": "tint-theme",
+            "displayName": "Tint",
+            "description": "Colours from your wallpaper, written by tint (github.com/duma799/tint).",
+            "publisher": "duma799",
+            "version": extensionVersion,
+            "engines": ["vscode": "^1.60.0"],
+            "categories": ["Themes"],
+            "contributes": ["themes": [["label": themeName, "uiTheme": dark ? "vs-dark" : "vs", "path": "./themes/tint-color-theme.json"]]],
+        ]
+        try writeJSON(manifest, to: folder + "/package.json")
+        try writeJSON(vscodeTheme(scheme), to: folder + "/themes/tint-color-theme.json")
+        var written = [folder + "/themes/tint-color-theme.json"]
+
+        // Register it once, the way VS Code records extensions it installed.
+        let registry = extensions + "/extensions.json"
+        if let data = FileManager.default.contents(atPath: registry),
+           var entries = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            let known = entries.contains { (($0["identifier"] as? [String: Any])?["id"] as? String) == extensionID }
+            if !known {
+                entries.append([
+                    "identifier": ["id": extensionID],
+                    "version": extensionVersion,
+                    "location": ["$mid": 1, "path": folder, "scheme": "file"],
+                    "relativeLocation": folderName,
+                ])
+                try writeJSON(entries, to: registry)
+                written.append(registry)
+            }
+        }
+        return written
+    }
+
+    /// The colour theme file: the same workbench colours, and token colours as TextMate rules.
+    static func vscodeTheme(_ s: Scheme) -> [String: Any] {
+        let (workbench, tokens) = vscodeColors(s)
+        let c = palette(s)
+        func rule(_ scope: Any, _ color: String, _ style: String? = nil) -> [String: Any] {
+            var settings: [String: String] = ["foreground": color]
+            if let style { settings["fontStyle"] = style }
+            return ["scope": scope, "settings": settings]
+        }
+        let basics: [[String: Any]] = [
+            rule(["comment", "punctuation.definition.comment"], c.comment, "italic"),
+            rule(["keyword", "keyword.control", "storage"], c.keyword, "bold"),
+            rule(["entity.name.function", "meta.function-call"], c.function, "bold"),
+            rule(["variable", "meta.definition.variable"], c.label),
+            rule(["string", "string.quoted"], c.string),
+            rule(["entity.name.type", "support.type", "support.class"], c.type, "bold"),
+            rule(["constant.numeric"], c.keywordDim),
+        ]
+        return [
+            "name": themeName,
+            "type": s.mode.rawValue,
+            "colors": workbench,
+            "tokenColors": basics + (tokens["textMateRules"] as? [[String: Any]] ?? []),
+            "semanticHighlighting": true,
+        ]
     }
 
     static func vscodeColors(_ s: Scheme) -> (workbench: [String: String], tokens: [String: Any]) {

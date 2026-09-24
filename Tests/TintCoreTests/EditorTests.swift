@@ -85,3 +85,41 @@ struct EditorTests {
         #expect(Rgb(hex: EditorThemes.palette(light).surface)!.lab.l <= light.background.lab.l)
     }
 }
+
+struct VSCodeThemeTests {
+    let s = testScheme
+
+    @Test func vscodeGetsASelectableTintThemeExtension() throws {
+        let home = TempDir()
+        home.write("Library/Application Support/Code/User/settings.json", "{\"editor.fontSize\": 14}")
+        home.write(".vscode/extensions/extensions.json", "[{\"identifier\": {\"id\": \"ms-python.python\"}, \"version\": \"1.0.0\"}]")
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+
+        let folder = ".vscode/extensions/duma799.tint-theme-1.0.0"
+        let manifest = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file(folder + "/package.json"))!) as! [String: Any]
+        let themes = (manifest["contributes"] as! [String: Any])["themes"] as! [[String: Any]]
+        #expect(themes[0]["label"] as? String == "Tint")
+        #expect(themes[0]["uiTheme"] as? String == "vs-dark")
+
+        let theme = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file(folder + "/themes/tint-color-theme.json"))!) as! [String: Any]
+        #expect((theme["colors"] as! [String: String])["terminal.ansiBlue"] == s[4].hex)
+        #expect(!(theme["tokenColors"] as! [Any]).isEmpty)
+
+        let settings = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file("Library/Application Support/Code/User/settings.json"))!) as! [String: Any]
+        #expect(settings["workbench.colorTheme"] as? String == "Tint")
+        #expect(settings["editor.fontSize"] as? Int == 14)
+
+        // Registered once, next to the existing extensions; a second apply doesn't add it again.
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+        let registry = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file(".vscode/extensions/extensions.json"))!) as! [[String: Any]]
+        let ids = registry.compactMap { ($0["identifier"] as? [String: Any])?["id"] as? String }
+        #expect(ids == ["ms-python.python", "duma799.tint-theme"])
+    }
+
+    @Test func withoutAnExtensionsFolderOnlyTheSettingsChange() throws {
+        let home = TempDir()
+        home.write("Library/Application Support/Code/User/settings.json", "{}")
+        let result = EditorThemes.write(s, paths: .init(home: home.path))
+        #expect(result.written == [home.file("Library/Application Support/Code/User/settings.json")])
+    }
+}
