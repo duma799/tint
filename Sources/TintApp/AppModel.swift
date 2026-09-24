@@ -50,9 +50,18 @@ final class AppModel {
     var cli: String? { ["/opt/homebrew/bin/tint", "/usr/local/bin/tint"].first { FileManager.default.isExecutableFile(atPath: $0) } }
 
     func start() async {
+        guard !started else { return }
+        started = true
         await refreshService()
-        if imagePath == nil { await loadCurrentWallpaper() }
+        // TINT_APP_IMAGE opens on a given image instead (screenshots, trying things out).
+        if let image = ProcessInfo.processInfo.environment["TINT_APP_IMAGE"] {
+            await load(image)
+        } else {
+            await loadCurrentWallpaper()
+        }
     }
+
+    private var started = false
 
     func loadCurrentWallpaper() async {
         let lookup = await Task.detached { MacWallpaper.current() }.value

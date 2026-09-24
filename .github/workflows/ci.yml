@@ -48,3 +48,27 @@ jobs:
           persist-credentials: false
 
       - run: swift test
+
+  # Opens the real app on a real wallpaper and takes a picture of it
+  # (attached to the run as "screenshot").
+  screenshot:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - run: swift build --product TintApp
+
+      - name: Screenshot
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/koi.jpg" https://raw.githubusercontent.com/duma799/yabai-config/main/backgrounds/koi.jpg
+          TINT_APP_IMAGE="$RUNNER_TEMP/koi.jpg" .build/debug/TintApp &
+          sleep 12
+          screencapture -x "$RUNNER_TEMP/screen.png"
+          kill %1 || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshot
+          path: ${{ runner.temp }}/screen.png
