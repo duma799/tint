@@ -9,5 +9,7 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <Authors>duma799</Authors>
     <RepositoryUrl>https://github.com/duma799/tint</RepositoryUrl>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <Copyright>Copyright © 2026 duma799</Copyright>
   </PropertyGroup>
 </Project>

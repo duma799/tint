@@ -103,3 +103,12 @@ CI builds and tests on macOS and Linux for every pull request.
 4. **Desktop app** — Avalonia: pick a wallpaper, preview, tweak, apply
 5. **More targets** — SketchyBar, JankyBorders, Waybar, Hyprland; `tint back`
 6. **Releases** — native binaries, Homebrew tap, `dotnet tool install -g tint`
+
+## License
+
+[GPL-3.0-or-later](LICENSE). You can use, study, change and share tint; if you
+distribute a modified version, its source must be available under the same
+license.
+
+Images are decoded with [ImageSharp](https://github.com/SixLabors/ImageSharp)
+(Six Labors Split License — Apache-2.0 for open-source projects like this one).
