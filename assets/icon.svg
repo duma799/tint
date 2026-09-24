@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d2331"/>
+      <stop offset="1" stop-color="#0d1017"/>
+    </linearGradient>
+    <linearGradient id="bands" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e2787f"/><stop offset="0.1667" stop-color="#e2787f"/>
+      <stop offset="0.1667" stop-color="#e6b872"/><stop offset="0.3333" stop-color="#e6b872"/>
+      <stop offset="0.3333" stop-color="#9ccb7e"/><stop offset="0.5" stop-color="#9ccb7e"/>
+      <stop offset="0.5" stop-color="#6fc6c4"/><stop offset="0.6667" stop-color="#6fc6c4"/>
+      <stop offset="0.6667" stop-color="#7d9ff0"/><stop offset="0.8333" stop-color="#7d9ff0"/>
+      <stop offset="0.8333" stop-color="#c48ae6"/><stop offset="1" stop-color="#c48ae6"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.35"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#body)"/>
+  <rect x="101" y="101" width="822" height="822" rx="185" fill="none" stroke="#fff" stroke-opacity="0.08" stroke-width="2"/>
+  <path d="M512 214 C 512 214 318 460 318 612 A 194 194 0 0 0 706 612 C 706 460 512 214 512 214 Z" fill="url(#bands)"/>
+  <path d="M512 214 C 512 214 318 460 318 612 A 194 194 0 0 0 706 612 C 706 460 512 214 512 214 Z" fill="url(#shine)"/>
+</svg>

@@ -1,0 +1,95 @@
+name: Release
+
+# Every pull request and push builds the Mac files (attached to the run, for
+# trying out) in a read-only job. A push to main whose version
+# (Sources/TintCore/Version.swift) has no release yet then publishes them as
+# release vX.Y.Z and updates the Homebrew formula and cask — in a separate
+# job that never runs pull-request code.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  package:
+    runs-on: macos-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Version
+        id: version
+        run: echo "version=$(sed -n 's/.*tintVersion = "\(.*\)".*/\1/p' Sources/TintCore/Version.swift)" >> "$GITHUB_OUTPUT"
+
+      - name: Package (universal)
+        run: scripts/package.sh
+
+      - name: Smoke test
+        run: |
+          mkdir -p "$RUNNER_TEMP/try"
+          tar -xzf dist/tint-*-macos.tar.gz -C "$RUNNER_TEMP/try"
+          lipo -archs "$RUNNER_TEMP/try/tint"
+          "$RUNNER_TEMP/try/tint" --version
+          "$RUNNER_TEMP/try/tint" palette assets/icon.png
+          ditto -x -k dist/Tint-*-macos.zip "$RUNNER_TEMP/try"
+          codesign --verify --strict --verbose "$RUNNER_TEMP/try/Tint.app"
+          lipo -archs "$RUNNER_TEMP/try/Tint.app/Contents/MacOS/Tint"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tint-${{ steps.version.outputs.version }}-macos
+          path: dist/
+
+  publish:
+    needs: package
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.package.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Already released?
+        id: check
+        run: |
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "v$VERSION is already released; nothing to do."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        if: steps.check.outputs.released == 'false'
+        with:
+          name: tint-${{ needs.package.outputs.version }}-macos
+          path: dist/
+
+      - name: Publish the release
+        if: steps.check.outputs.released == 'false'
+        run: gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "tint $VERSION" --generate-notes
+
+      - name: Update the Homebrew formula and cask
+        if: steps.check.outputs.released == 'false'
+        run: |
+          scripts/homebrew.sh "$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula Casks
+          git commit -m "Homebrew: tint $VERSION"
+          git push origin HEAD:main
