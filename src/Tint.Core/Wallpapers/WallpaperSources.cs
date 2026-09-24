@@ -15,7 +15,10 @@ public static class WallpaperSources
 
         if (OperatingSystem.IsLinux())
         {
-            return new WaypaperWallpaperSource();
+            // Omarchy manages its own backgrounds; everywhere else, waypaper.
+            return Directory.Exists(Path.Combine(OmarchyWallpaperSource.DefaultStateDirectory, "current"))
+                ? new OmarchyWallpaperSource()
+                : new WaypaperWallpaperSource();
         }
 
         throw new PlatformNotSupportedException("tint supports macOS and Linux.");

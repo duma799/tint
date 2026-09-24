@@ -40,7 +40,11 @@ dotnet run --project src/Tint.Cli -- watch --verbose
 | System | Signal | Current wallpaper from |
 | --- | --- | --- |
 | macOS | files under `~/Library/Application Support/com.apple.wallpaper` change | System Events, via `osascript` |
-| Linux | waypaper rewrites `~/.config/waypaper/config.ini` | that same file |
+| Linux (Omarchy) | Omarchy re-points `~/.local/state/omarchy/current/background` | where that link points |
+| Linux (waypaper) | waypaper rewrites `~/.config/waypaper/config.ini` | that same file |
+
+On Linux, tint uses Omarchy when `~/.local/state/omarchy/current` exists and
+waypaper otherwise.
 
 A wallpaper change writes several files in a burst, so events are debounced:
 tint waits until things are quiet for 400 ms, then checks the wallpaper once and
