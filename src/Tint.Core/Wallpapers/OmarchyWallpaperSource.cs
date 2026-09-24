@@ -27,6 +27,9 @@ public sealed class OmarchyWallpaperSource(string? stateDirectory = null, TimePr
 
     protected override string WatchDirectory => _currentDirectory;
 
+    // Re-pointing the link replaces an entry in this folder, which updates its time.
+    protected override string? StampPath => _currentDirectory;
+
     public override string? Current()
     {
         var link = new FileInfo(Path.Combine(_currentDirectory, "background"));
