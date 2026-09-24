@@ -114,6 +114,8 @@ on.
 The **menu bar item** (a drop) shows the current colours, switches the mode,
 and re-themes from the wallpaper in one click.
 
+![The tint app](assets/app.png)
+
 ## How the wallpaper is found
 
 Changing the wallpaper rewrites

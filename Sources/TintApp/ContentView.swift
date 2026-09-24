@@ -24,7 +24,7 @@ struct ContentView: View {
         }
         .padding(28)
         .frame(minWidth: 920, minHeight: 640)
-        .background(scheme.map { Color($0.background) } ?? Color(nsColor: .windowBackgroundColor))
+        .background(scheme.map { Color($0.background) } ?? Color(nsColor: .windowBackgroundColor), ignoresSafeAreaEdges: .all)
         .foregroundStyle(scheme.map { Color($0.foreground) } ?? Color.primary)
         .tint(scheme.map { Color($0[4]) } ?? Color.accentColor)
         .preferredColorScheme(scheme?.mode == .light ? .light : .dark)
@@ -164,6 +164,10 @@ struct PaletteStrip: View {
         }
         .frame(height: 20)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay {
+            // Dark images' darkest colour is close to the background: outline the strip.
+            RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.primary.opacity(0.15), lineWidth: 1)
+        }
     }
 }
 

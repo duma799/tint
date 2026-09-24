@@ -12,6 +12,7 @@ struct TintApp: App {
             ContentView(model: model)
         }
         .defaultSize(width: 1180, height: 800)
+        .windowStyle(.hiddenTitleBar)
 
         // Always there: the current scheme, a mode switch, re-theme now.
         MenuBarExtra("tint", systemImage: "drop.fill") {
