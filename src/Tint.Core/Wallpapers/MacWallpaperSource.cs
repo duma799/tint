@@ -23,7 +23,7 @@ public sealed class MacWallpaperSource(TimeProvider? timeProvider = null) : Watc
     private const string AppleScriptNull = "missing value";
 
     private static readonly string StoreDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        TintPaths.Home,
         "Library", "Application Support", "com.apple.wallpaper");
 
     /// <summary>
@@ -31,7 +31,7 @@ public sealed class MacWallpaperSource(TimeProvider? timeProvider = null) : Watc
     /// one folder per provider (<c>extension-&lt;provider id&gt;</c>).
     /// </summary>
     private static readonly string SnapshotCacheDirectory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        TintPaths.Home,
         "Library", "Containers", "com.apple.wallpaper.agent", "Data", "Library", "Caches", "com.apple.wallpaper.caches");
 
     public override string Name => "macOS";

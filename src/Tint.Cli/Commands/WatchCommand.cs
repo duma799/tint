@@ -19,13 +19,17 @@ internal static class WatchCommand
     {
         var verbose = new Option<bool>("--verbose", "-v") { Description = "Show raw file events and fallbacks." };
         var noApply = new Option<bool>("--no-apply") { Description = "Only show each new palette; don't change any themes." };
-        Option<string> mode = ApplyCommand.ModeOption();
+        Option<string?> mode = ApplyCommand.ModeOption();
+        Option<double?> saturation = ApplyCommand.SaturationOption();
 
-        var command = new Command("watch", "Watch for wallpaper changes and apply a theme from each one.") { verbose, noApply, mode };
+        var command = new Command("watch", "Watch for wallpaper changes and apply a theme from each one.") { verbose, noApply, mode, saturation };
         command.SetAction(async (parse, cancellationToken) =>
         {
             bool apply = !parse.GetValue(noApply);
-            var options = new ApplyOptions { Mode = ApplyCommand.ParseMode(parse.GetValue(mode)!) };
+
+            // Read the saved settings on every change, not once: a mode picked
+            // in the desktop app then applies without restarting the service.
+            Func<ApplyOptions> options = () => ApplyCommand.Options(parse.GetValue(mode), parse.GetValue(saturation));
 
             using IWallpaperSource source = WallpaperSources.ForCurrentPlatform();
             if (parse.GetValue(verbose))
@@ -56,14 +60,22 @@ internal static class WatchCommand
         return command;
     }
 
-    private static void OnChanged(string path, bool apply, ApplyOptions options)
+    private static void OnChanged(string path, bool apply, Func<ApplyOptions> options)
     {
         Terminal.Log($"wallpaper changed → {path}");
         if (apply)
         {
             lock (ApplyGate)
             {
-                ApplyCommand.Run(path, options, compact: true);
+                // Something else (`tint apply -w`, the desktop app) already
+                // themed from this image, maybe with other options: keep that.
+                if (ThemeApplier.LastApplied() == Path.GetFullPath(path))
+                {
+                    Terminal.Log("already themed from it");
+                    return;
+                }
+
+                ApplyCommand.Run(path, options(), compact: true);
             }
 
             return;

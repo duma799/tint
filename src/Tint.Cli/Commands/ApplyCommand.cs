@@ -9,23 +9,44 @@ namespace Tint.Cli.Commands;
 /// <summary><c>tint apply [image]</c> — theme everything from an image (default: the current wallpaper).</summary>
 internal static class ApplyCommand
 {
-    public static Option<string> ModeOption()
+    public static Option<string?> ModeOption()
     {
-        var mode = new Option<string>("--mode", "-m")
+        var mode = new Option<string?>("--mode", "-m")
         {
-            Description = "dark, light, or auto (from the image's brightness).",
-            DefaultValueFactory = _ => "dark",
+            Description = "dark, light, or auto (from the image's brightness). Default: your saved setting, else dark.",
         };
         mode.AcceptOnlyFromAmong("dark", "light", "auto");
         return mode;
     }
 
-    public static ThemeMode? ParseMode(string value) => value switch
+    public static Option<double?> SaturationOption()
     {
-        "light" => ThemeMode.Light,
-        "auto" => null,
-        _ => ThemeMode.Dark,
-    };
+        var saturation = new Option<double?>("--saturation", "-s")
+        {
+            Description = $"Accent saturation, {SchemeBuilder.MinSaturation}–{SchemeBuilder.MaxSaturation} (1 = the image's own). Default: your saved setting, else 1.",
+        };
+        saturation.Validators.Add(result =>
+        {
+            if (result.GetValueOrDefault<double?>() is { } value
+                && value is < SchemeBuilder.MinSaturation or > SchemeBuilder.MaxSaturation)
+            {
+                result.AddError($"--saturation must be between {SchemeBuilder.MinSaturation} and {SchemeBuilder.MaxSaturation}.");
+            }
+        });
+        return saturation;
+    }
+
+    /// <summary>Options given on the command line win; the rest come from the saved settings.</summary>
+    public static ApplyOptions Options(string? mode, double? saturation, bool reload = true)
+    {
+        TintSettings saved = TintSettings.Load();
+        return new ApplyOptions
+        {
+            Mode = mode is null ? saved.Mode : TintSettings.ParseMode(mode),
+            Saturation = saturation ?? saved.Saturation,
+            Reload = reload,
+        };
+    }
 
     public static Command Create()
     {
@@ -34,13 +55,30 @@ internal static class ApplyCommand
             Description = "Image to theme from. Defaults to the current wallpaper.",
             Arity = ArgumentArity.ZeroOrOne,
         };
-        Option<string> mode = ModeOption();
+        Option<string?> mode = ModeOption();
+        Option<double?> saturation = SaturationOption();
         var noReload = new Option<bool>("--no-reload") { Description = "Only write the files; don't tell apps to reload." };
+        var setWallpaper = new Option<bool>("--set-wallpaper", "-w") { Description = "Also make the image the desktop wallpaper." };
 
-        var command = new Command("apply", "Generate a colour scheme from an image and apply it everywhere.") { image, mode, noReload };
+        var command = new Command("apply", "Generate a colour scheme from an image and apply it everywhere.")
+        {
+            image, mode, saturation, noReload, setWallpaper,
+        };
         command.SetAction(parse =>
         {
             string? path = parse.GetValue(image)?.FullName;
+            if (path is not null && parse.GetValue(setWallpaper))
+            {
+                try
+                {
+                    WallpaperSetter.Set(path);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException or TimeoutException)
+                {
+                    return Terminal.Error(ex.Message);
+                }
+            }
+
             if (path is null)
             {
                 using IWallpaperSource source = WallpaperSources.ForCurrentPlatform();
@@ -51,7 +89,7 @@ internal static class ApplyCommand
                 }
             }
 
-            var options = new ApplyOptions { Mode = ParseMode(parse.GetValue(mode)!), Reload = !parse.GetValue(noReload) };
+            ApplyOptions options = Options(parse.GetValue(mode), parse.GetValue(saturation), reload: !parse.GetValue(noReload));
             return Run(path, options, compact: false) ? 0 : 1;
         });
 

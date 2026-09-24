@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Tint.App/Tint.App.csproj" />
     <Project Path="src/Tint.Cli/Tint.Cli.csproj" />
     <Project Path="src/Tint.Core/Tint.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Tint.App.Tests/Tint.App.Tests.csproj" />
     <Project Path="tests/Tint.Core.Tests/Tint.Core.Tests.csproj" />
   </Folder>
 </Solution>

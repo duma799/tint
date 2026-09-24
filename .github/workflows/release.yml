@@ -1,0 +1,84 @@
+name: Release
+
+# A push to main whose version (Directory.Build.props) has no release yet
+# builds the Mac files, publishes them as release vX.Y.Z, and updates the
+# Homebrew formula and cask. Pull requests build the same files without
+# publishing, so packaging problems show up before merging — the files are
+# attached to the run, for trying out.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  package:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" > /dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package for Apple silicon
+        run: scripts/package.sh osx-arm64
+
+      - name: Package for Intel
+        run: scripts/package.sh osx-x64
+
+      - name: Smoke test
+        run: |
+          mkdir -p "$RUNNER_TEMP/try"
+          tar -xzf dist/tint-*-osx-arm64.tar.gz -C "$RUNNER_TEMP/try"
+          "$RUNNER_TEMP/try/tint" --version
+          "$RUNNER_TEMP/try/tint" palette assets/icon.png
+          "$RUNNER_TEMP/try/tint" apply assets/icon.png --no-reload
+          ditto -x -k dist/Tint-*-osx-arm64.zip "$RUNNER_TEMP/try"
+          codesign --verify --verbose "$RUNNER_TEMP/try/Tint.app"
+          test -x "$RUNNER_TEMP/try/Tint.app/Contents/MacOS/Tint"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tint-${{ steps.version.outputs.version }}-mac
+          path: dist/
+
+      - name: Publish the release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.version.outputs.released == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "tint $VERSION" --generate-notes
+
+      - name: Update the Homebrew formula and cask
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.version.outputs.released == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          scripts/homebrew.sh "$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula Casks
+          git commit -m "Homebrew: tint $VERSION"
+          git push origin HEAD:main

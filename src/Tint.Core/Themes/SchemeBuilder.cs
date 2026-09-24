@@ -22,8 +22,22 @@ public static class SchemeBuilder
         200, // cyan
     ];
 
-    public static Scheme Build(Palette palette, ThemeMode mode)
+    /// <summary>Lowest and highest <c>saturation</c> accepted by <see cref="Build"/>.</summary>
+    public const double MinSaturation = 0.5;
+
+    public const double MaxSaturation = 1.5;
+
+    /// <param name="saturation">
+    /// Scales how colourful the accents are: 1 keeps the image's own colours,
+    /// 0.5 is muted, 1.5 vivid. Contrast is still checked afterwards.
+    /// </param>
+    public static Scheme Build(Palette palette, ThemeMode mode, double saturation = 1)
     {
+        if (saturation is < MinSaturation or > MaxSaturation || double.IsNaN(saturation))
+        {
+            throw new ArgumentOutOfRangeException(nameof(saturation), $"Saturation must be between {MinSaturation} and {MaxSaturation}.");
+        }
+
         if (palette.Swatches.Count == 0)
         {
             throw new ArgumentException("The palette has no colours.", nameof(palette));
@@ -46,7 +60,15 @@ public static class SchemeBuilder
             : (darkest with { L = Math.Min(darkest.L, 22) }).WithMaxChroma(12);
         Rgb foreground = Readable(foregroundLab, background, Contrast.Enhanced, dark);
 
-        Lab[] accents = PickAccents(labs, backgroundLab, foregroundLab);
+        // Accents stay in a mid-lightness band, so none reads as black (on a
+        // light theme) or white (on a dark one) — a navy "blue" is still blue.
+        Lab[] accents = [.. PickAccents(labs, backgroundLab, foregroundLab)
+            .Select(a => a with
+            {
+                L = dark ? Math.Min(a.L, 78) : Math.Max(a.L, 40),
+                A = a.A * saturation,
+                B = a.B * saturation,
+            })];
 
         var colors = new Rgb[16];
         colors[0] = background;

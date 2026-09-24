@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Tint.App.MainWindow"
+        Title="tint"
+        Icon="avares://Tint/Assets/icon.png"
+        Width="1180" Height="820" MinWidth="900" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="#12151c">
+
+  <Grid ColumnDefinitions="3*,2*" ColumnSpacing="28" Margin="28">
+
+    <!-- Left: the image -->
+    <Grid RowDefinitions="*,Auto" RowSpacing="14">
+      <Border x:Name="ImageFrame" CornerRadius="16" ClipToBounds="True" Background="#1affffff"
+              DragDrop.AllowDrop="True">
+        <Panel>
+          <Image x:Name="Preview" Stretch="UniformToFill" />
+          <TextBlock x:Name="DropHint" Text="Drop an image here, or open one below"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.55" />
+        </Panel>
+      </Border>
+
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+        <Button x:Name="CurrentButton" Content="Current wallpaper" Click="OnCurrentWallpaper" />
+        <Button Grid.Column="1" Content="Open image…" Click="OnOpenImage" />
+        <TextBlock Grid.Column="2" x:Name="FileName" VerticalAlignment="Center" Margin="6,0,0,0"
+                   Opacity="0.6" TextTrimming="CharacterEllipsis" />
+      </Grid>
+    </Grid>
+
+    <!-- Right: what the image becomes, and the knobs -->
+    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="8" Margin="0,0,14,0">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Text="tint" FontSize="30" FontWeight="Bold" />
+          <TextBlock x:Name="Mood" VerticalAlignment="Bottom" Margin="0,0,0,5" Opacity="0.6" />
+        </StackPanel>
+
+        <TextBlock Classes="label" Text="PALETTE" Margin="0,8,0,0" />
+        <Border CornerRadius="6" ClipToBounds="True" Height="20">
+          <Grid x:Name="PaletteStrip" />
+        </Border>
+
+        <TextBlock Classes="label" Text="SCHEME — CLICK A COLOUR TO COPY IT" Margin="0,8,0,0" />
+        <UniformGrid x:Name="SchemeGrid" Columns="8" />
+
+        <TextBlock Classes="label" Text="PREVIEW" Margin="0,8,0,0" />
+        <Border x:Name="TerminalFrame" CornerRadius="10" Padding="16,12" BorderThickness="1">
+          <SelectableTextBlock x:Name="TerminalText" FontFamily="Menlo, SF Mono, DejaVu Sans Mono, monospace"
+                               FontSize="12.5" LineHeight="19" TextWrapping="Wrap" />
+        </Border>
+
+        <TextBlock Classes="label" Text="MODE" Margin="0,8,0,0" />
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <RadioButton x:Name="DarkMode" GroupName="mode" Content="Dark" IsChecked="True" />
+          <RadioButton x:Name="LightMode" GroupName="mode" Content="Light" />
+          <RadioButton x:Name="AutoMode" GroupName="mode" Content="Auto (from the image)" />
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+          <TextBlock Classes="label" Text="SATURATION" />
+          <TextBlock Grid.Column="1" x:Name="SaturationValue" FontSize="12" Opacity="0.7" />
+        </Grid>
+        <Slider x:Name="SaturationSlider" Minimum="0.5" Maximum="1.5" Value="1"
+                TickFrequency="0.05" IsSnapToTickEnabled="True" />
+
+        <CheckBox x:Name="SetWallpaper" Content="Also set it as the desktop wallpaper" />
+
+        <Button x:Name="ApplyButton" Content="Apply" Click="OnApply" IsEnabled="False"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                FontWeight="SemiBold" Padding="0,10" CornerRadius="8" Margin="0,4,0,0" />
+        <TextBlock Text="Apply also saves the mode and saturation for `tint apply` and the login service."
+                   FontSize="11" Opacity="0.5" TextWrapping="Wrap" />
+        <TextBlock x:Name="Status" TextWrapping="Wrap" FontSize="12.5" LineHeight="20" Margin="0,4,0,0" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Window>

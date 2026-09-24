@@ -69,7 +69,7 @@ public sealed class OutputTests : IDisposable
         string[] expected =
         [
             "wal", "colors", "colors.json", "colors.sh", "colors.css", "colors-kitty.conf", "colors-wal.vim",
-            "sketchybar-colors.sh",
+            "colors-ghostty", "colors-wezterm.toml", "sketchybar-colors.sh",
         ];
         Assert.Equal(expected.Order(), result.Written.Select(Path.GetFileName).Order()!);
         Assert.Empty(result.Warnings);

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Tint.Core.Themes;
 using Tint.Core.Util;
 
@@ -20,11 +19,11 @@ public interface IReloader
 public static class Reloaders
 {
     /// <summary>
-    /// The reload steps, in order. Built-in macOS app reloads (SketchyBar,
-    /// JankyBorders, Ghostty) are still to come; until then the user's hook
-    /// covers them.
+    /// The reload steps, in order. The user's hook goes last, so it can build
+    /// on (or undo) anything the built-in steps did.
     /// </summary>
-    public static IReadOnlyList<IReloader> ForCurrentPlatform() => [new HookReloader()];
+    public static IReadOnlyList<IReloader> ForCurrentPlatform() =>
+        [new SketchyBarReloader(), new BordersReloader(), new GhosttyReloader(), new HookReloader()];
 }
 
 /// <summary>Runs one command, if it's installed.</summary>
@@ -95,22 +94,22 @@ public sealed class HookReloader(string? hooksDirectory = null) : IReloader
 
         // Output is NOT captured: hooks often start background processes (a
         // shell, a bar), which would keep a captured pipe open and hang tint.
-        var info = new ProcessStartInfo(hook) { UseShellExecute = false };
-        info.Environment["TINT_WALLPAPER"] = context.Wallpaper;
-        info.Environment["TINT_MODE"] = context.Scheme.Mode == ThemeMode.Dark ? "dark" : "light";
-        info.Environment["TINT_CACHE"] = context.CacheDirectory;
+        var environment = new Dictionary<string, string>
+        {
+            ["TINT_WALLPAPER"] = context.Wallpaper,
+            ["TINT_MODE"] = context.Scheme.Mode == ThemeMode.Dark ? "dark" : "light",
+            ["TINT_CACHE"] = context.CacheDirectory,
+        };
 
         try
         {
-            using Process process = Process.Start(info) ?? throw new InvalidOperationException("could not start the hook");
-            if (!process.WaitForExit(Timeout))
+            int? exit = Processes.RunDetached(hook, [], Timeout, environment);
+            return exit switch
             {
-                return new ReloadResult(Name, Ok: false, Skipped: false, $"still running after {Timeout.TotalSeconds:0} s; left it running");
-            }
-
-            return process.ExitCode == 0
-                ? new ReloadResult(Name, Ok: true, Skipped: false, "ran")
-                : new ReloadResult(Name, Ok: false, Skipped: false, $"exited {process.ExitCode}");
+                0 => new ReloadResult(Name, Ok: true, Skipped: false, "ran"),
+                null => new ReloadResult(Name, Ok: false, Skipped: false, $"still running after {Timeout.TotalSeconds:0} s; left it running"),
+                _ => new ReloadResult(Name, Ok: false, Skipped: false, $"exited {exit}"),
+            };
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
