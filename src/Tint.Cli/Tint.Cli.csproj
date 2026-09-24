@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>tint</AssemblyName>
+    <RootNamespace>Tint.Cli</RootNamespace>
+    <Description>Colour themes from your wallpaper, for macOS and Linux.</Description>
+
+    <!-- Lets it ship as a global tool: dotnet tool install -g tint -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>tint</ToolCommandName>
+    <PackageId>tint</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tint.Core\Tint.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.12" />
+  </ItemGroup>
+
+</Project>
