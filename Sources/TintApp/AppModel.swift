@@ -4,7 +4,7 @@ import Observation
 import ServiceManagement
 import TintCore
 
-extension ModePreference: @retroactive Identifiable {
+extension ModePreference: Identifiable {
     public var id: Self { self }
 
     var label: String {
