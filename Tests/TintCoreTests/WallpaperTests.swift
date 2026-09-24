@@ -106,16 +106,20 @@ struct WatcherTests {
     @Test func aBurstOfEventsLeadsToOneCheck() async throws {
         let box = Box()
         box.value = "/a.jpg"
-        let watcher = WallpaperWatcher(directories: [], settle: 0.1) { box.value }
+        // Generous margins: CI machines can be slow to schedule.
+        let watcher = WallpaperWatcher(directories: [], settle: 1.0) { box.value }
         watcher.onChange = { box.changes.append($0) }
         watcher.start()
         defer { watcher.stop() }
 
         box.value = "/b.jpg"
         for _ in 0..<5 { watcher.trigger() }
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await Task.sleep(nanoseconds: 100_000_000)
         #expect(box.changes.isEmpty) // still settling
-        try await Task.sleep(nanoseconds: 300_000_000)
+
+        for _ in 0..<50 where box.changes.isEmpty {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
         #expect(box.changes == ["/b.jpg"])
     }
 }
