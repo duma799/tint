@@ -1,13 +1,14 @@
 using System.Runtime.Versioning;
 using Tint.Core.Util;
+using static Tint.Core.Wallpapers.MacWallpaperStore;
 
 namespace Tint.Core.Wallpapers;
 
 /// <summary>
-/// macOS. Recent versions keep wallpaper settings under
-/// <c>~/Library/Application Support/com.apple.wallpaper</c>; changing the
-/// wallpaper rewrites files there, which is the signal to look again. The path
-/// itself comes from System Events via <c>osascript</c>.
+/// macOS. Changing the wallpaper rewrites
+/// <c>~/Library/Application Support/com.apple.wallpaper/Store/Index.plist</c>,
+/// which is the signal to look again. The path comes from System Events first
+/// and, when that has none, from Index.plist itself.
 /// </summary>
 /// <remarks>
 /// The first run asks for permission for your terminal to control
@@ -16,13 +17,40 @@ namespace Tint.Core.Wallpapers;
 [SupportedOSPlatform("macos")]
 public sealed class MacWallpaperSource(TimeProvider? timeProvider = null) : WatchedWallpaperSource(timeProvider)
 {
-    public override string Name => "macOS";
+    /// <summary>What AppleScript prints for "nothing" — not a path.</summary>
+    private const string AppleScriptNull = "missing value";
 
-    protected override string WatchDirectory => Path.Combine(
+    private static readonly string StoreDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "Library", "Application Support", "com.apple.wallpaper");
 
+    public override string Name => "macOS";
+
+    protected override string WatchDirectory => StoreDirectory;
+
     public override string? Current()
+    {
+        string? fromSystemEvents = QuerySystemEvents();
+        if (fromSystemEvents is not null && File.Exists(fromSystemEvents))
+        {
+            return fromSystemEvents;
+        }
+
+        OnTrace("System Events has no file path for this wallpaper; reading Index.plist");
+        StoreChoice store = ReadStore();
+        if (store.File is not null && File.Exists(store.File))
+        {
+            return store.File;
+        }
+
+        OnNotice(store.Provider is null
+            ? "couldn't find an image file for the current wallpaper."
+            : $"the current wallpaper is {Describe(store.Provider)} — there's no image file to take colours from. " +
+              "Choose a photo or picture as the wallpaper and tint will pick it up.");
+        return null;
+    }
+
+    private string? QuerySystemEvents()
     {
         ProcessResult result = ProcessRunner.Run(
             "osascript",
@@ -34,6 +62,37 @@ public sealed class MacWallpaperSource(TimeProvider? timeProvider = null) : Watc
             return null;
         }
 
-        return string.IsNullOrWhiteSpace(result.StdOut) ? null : result.StdOut;
+        string output = result.StdOut;
+        return output.Length == 0 || output == AppleScriptNull ? null : output;
     }
+
+    private StoreChoice ReadStore()
+    {
+        string index = Path.Combine(StoreDirectory, "Store", "Index.plist");
+        if (!File.Exists(index))
+        {
+            OnTrace($"{index} not found");
+            return new StoreChoice(null, null);
+        }
+
+        // Index.plist is a binary plist; plutil (built into macOS) turns it into XML.
+        ProcessResult xml = ProcessRunner.Run("plutil", ["-convert", "xml1", "-o", "-", index]);
+        if (!xml.Succeeded)
+        {
+            OnTrace($"plutil failed: {xml.StdErr}");
+            return new StoreChoice(null, null);
+        }
+
+        StoreChoice choice = PickDesktopChoice(FlattenPlist(xml.StdOut));
+        OnTrace($"Index.plist → file: {choice.File ?? "none"}, provider: {choice.Provider ?? "none"}");
+        return choice;
+    }
+
+    private static string Describe(string provider) => provider switch
+    {
+        _ when provider.Contains("aerial", StringComparison.OrdinalIgnoreCase) => "an aerial video",
+        _ when provider.Contains("color", StringComparison.OrdinalIgnoreCase) => "a solid colour",
+        _ when provider.Contains("image", StringComparison.OrdinalIgnoreCase) => "a picture tint couldn't locate",
+        _ => $"a built-in dynamic wallpaper ({provider})",
+    };
 }

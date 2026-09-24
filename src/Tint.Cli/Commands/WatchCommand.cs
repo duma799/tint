@@ -24,6 +24,7 @@ internal static class WatchCommand
                 source.Trace += message => Terminal.Log($"  · {message}");
             }
 
+            source.Notice += message => Terminal.Log($"note: {message}");
             source.Changed += (_, e) => OnChanged(e.Path);
             source.Start();
 

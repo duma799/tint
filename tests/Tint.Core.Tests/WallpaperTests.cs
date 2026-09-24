@@ -53,7 +53,37 @@ public class WatchedWallpaperSourceTests
         // Doesn't exist, so the source falls back to polling on the fake clock.
         protected override string WatchDirectory => Path.Combine(Path.GetTempPath(), $"tint-missing-{Guid.NewGuid():N}");
 
-        public override string? Current() => Wallpaper;
+        public override string? Current()
+        {
+            if (Wallpaper is null)
+            {
+                OnNotice("no image file");
+            }
+
+            return Wallpaper;
+        }
+    }
+
+    [Fact]
+    public void Notices_are_shown_once_until_a_readable_wallpaper_returns()
+    {
+        var time = new FakeTimeProvider();
+        using var source = new FakeSource(time) { Wallpaper = "/walls/a.jpg" };
+        var notices = new List<string>();
+        source.Notice += notices.Add;
+        source.Start();
+
+        source.Wallpaper = null;
+        time.Advance(TimeSpan.FromSeconds(2));
+        time.Advance(TimeSpan.FromSeconds(2));
+        time.Advance(TimeSpan.FromSeconds(2));
+        Assert.Single(notices);
+
+        source.Wallpaper = "/walls/b.jpg";
+        time.Advance(TimeSpan.FromSeconds(2));
+        source.Wallpaper = null;
+        time.Advance(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, notices.Count);
     }
 
     [Fact]

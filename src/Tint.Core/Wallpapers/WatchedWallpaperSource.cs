@@ -17,6 +17,7 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
     private FileSystemWatcher? _watcher;
     private ITimer? _poll;
     private string? _last;
+    private string? _lastNotice;
 
     protected WatchedWallpaperSource(TimeProvider? timeProvider = null)
     {
@@ -35,6 +36,8 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
     public event EventHandler<WallpaperChangedEventArgs>? Changed;
 
     public event Action<string>? Trace;
+
+    public event Action<string>? Notice;
 
     public abstract string? Current();
 
@@ -77,6 +80,22 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
 
     protected void OnTrace(string message) => Trace?.Invoke(message);
 
+    /// <summary>Tells the user something, once — repeats of the same message are dropped.</summary>
+    protected void OnNotice(string message)
+    {
+        lock (_gate)
+        {
+            if (message == _lastNotice)
+            {
+                return;
+            }
+
+            _lastNotice = message;
+        }
+
+        Notice?.Invoke(message);
+    }
+
     /// <summary>Re-reads the wallpaper and raises <see cref="Changed"/> if it moved on.</summary>
     internal void Check()
     {
@@ -89,6 +108,7 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
             }
 
             _last = current;
+            _lastNotice = null; // a readable wallpaper again: allow the same notice next time
         }
 
         Changed?.Invoke(this, new WallpaperChangedEventArgs(current));

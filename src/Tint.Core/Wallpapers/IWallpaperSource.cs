@@ -23,6 +23,12 @@ public interface IWallpaperSource : IDisposable
     /// <summary>Low-level detail (raw file events, fallbacks) for <c>--verbose</c>.</summary>
     event Action<string>? Trace;
 
+    /// <summary>
+    /// Things the user should always see, e.g. "the new wallpaper has no image
+    /// file to read". Raised once per distinct message, not on every file event.
+    /// </summary>
+    event Action<string>? Notice;
+
     /// <summary>Begins watching. Events are raised on a background thread.</summary>
     void Start();
 }
