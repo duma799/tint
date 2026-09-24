@@ -47,6 +47,21 @@ jobs:
           .build/debug/tint wallpaper -v || true
           .build/debug/tint doctor || true
 
+      # The login service's job, end to end: a long-running `tint watch` must
+      # see every wallpaper change, not only the first.
+      - name: Watch sees repeated wallpaper changes
+        run: |
+          for n in 1 2 3; do sips -r $((n * 90)) -s format jpeg assets/icon.png --out "$RUNNER_TEMP/wall$n.jpg" > /dev/null; done
+          .build/debug/tint watch -v > "$RUNNER_TEMP/watch.log" 2>&1 &
+          sleep 4
+          for n in 1 2 3; do
+            .build/debug/tint apply "$RUNNER_TEMP/wall$n.jpg" -w --no-reload > /dev/null
+            sleep 4
+          done
+          kill %1 || true
+          cat "$RUNNER_TEMP/watch.log"
+          test "$(grep -c 'wallpaper changed' "$RUNNER_TEMP/watch.log")" -ge 3
+
   # The core (colour maths, output, store parsing…) has no macOS calls in
   # its tests, so they run on Linux too.
   linux:

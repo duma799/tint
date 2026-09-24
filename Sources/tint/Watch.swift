@@ -66,8 +66,10 @@ struct Watch: ParsableCommand {
             Signals.keep.append(source)
         }
 
-        // Serve the main queue forever: AppKit's screen lookups run there.
-        dispatchMain()
+        // Run the main run loop forever: AppKit's screen lookups run on the
+        // main queue, and AppKit only learns about system changes (like a new
+        // wallpaper) while the run loop turns — dispatchMain() never turns it.
+        while true { RunLoop.main.run(mode: .default, before: .distantFuture) }
     }
 }
 

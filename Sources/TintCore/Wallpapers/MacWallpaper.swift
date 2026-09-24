@@ -37,16 +37,17 @@ public enum MacWallpaper {
         let store = readStore()
         trace.append("Index.plist → file: \(store.file ?? "none"), provider: \(store.provider ?? "none")")
 
-        // Pictures and photos: what macOS reports for the screen is the most
-        // precise (it knows about per-display and per-space wallpapers).
+        // Pictures and photos: the store first. It is read fresh from disk
+        // every time, while what AppKit reports can stay stale inside a
+        // long-running process (the login service) — it saw only the first change.
         let isPicture = store.provider.map { $0.contains(".image") || $0.contains("dynamic") } ?? true
         if isPicture {
+            if let file = store.file, TintPaths.exists(file) {
+                return Lookup(path: file, notice: nil, trace: trace)
+            }
             if let reported = reportedImage() {
                 trace.append("macOS reports \(reported)")
                 return Lookup(path: reported, notice: nil, trace: trace)
-            }
-            if let file = store.file, TintPaths.exists(file) {
-                return Lookup(path: file, notice: nil, trace: trace)
             }
         }
 
