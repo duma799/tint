@@ -54,16 +54,18 @@ public sealed class MainWindowTests : IDisposable
     }, CancellationToken.None);
 
     [Fact]
-    public Task A_file_that_is_not_an_image_is_reported() => Session.Dispatch(async () =>
+    public Task A_file_that_is_not_an_image_is_reported_and_nothing_stale_can_be_applied() => Session.Dispatch(async () =>
     {
         string text = Path.Combine(_dir, "notes.txt");
         await File.WriteAllTextAsync(text, "hello");
         var window = new MainWindow(loadWallpaper: false);
         window.Show();
+        await window.LoadImageAsync(Sunset(Path.Combine(_dir, "sunset.png")));
 
         await window.LoadImageAsync(text);
 
         Assert.Null(window.Scheme);
+        Assert.False(window.FindControl<Button>("ApplyButton")!.IsEnabled);
         Assert.StartsWith("Couldn't read it", window.FindControl<TextBlock>("Status")!.Text, StringComparison.Ordinal);
         window.Close();
         return true;

@@ -28,7 +28,7 @@ internal static class ApplyCommand
         saturation.Validators.Add(result =>
         {
             if (result.GetValueOrDefault<double?>() is { } value
-                && value is < SchemeBuilder.MinSaturation or > SchemeBuilder.MaxSaturation)
+                && (double.IsNaN(value) || value is < SchemeBuilder.MinSaturation or > SchemeBuilder.MaxSaturation))
             {
                 result.AddError($"--saturation must be between {SchemeBuilder.MinSaturation} and {SchemeBuilder.MaxSaturation}.");
             }
@@ -67,18 +67,7 @@ internal static class ApplyCommand
         command.SetAction(parse =>
         {
             string? path = parse.GetValue(image)?.FullName;
-            if (path is not null && parse.GetValue(setWallpaper))
-            {
-                try
-                {
-                    WallpaperSetter.Set(path);
-                }
-                catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException or TimeoutException)
-                {
-                    return Terminal.Error(ex.Message);
-                }
-            }
-
+            bool wallpaperToo = path is not null && parse.GetValue(setWallpaper);
             if (path is null)
             {
                 using IWallpaperSource source = WallpaperSources.ForCurrentPlatform();
@@ -90,14 +79,35 @@ internal static class ApplyCommand
             }
 
             ApplyOptions options = Options(parse.GetValue(mode), parse.GetValue(saturation), reload: !parse.GetValue(noReload));
-            return Run(path, options, compact: false) ? 0 : 1;
+            ApplyResult? result = Run(path, options, compact: false);
+            if (result is null)
+            {
+                return 1;
+            }
+
+            // After the theme exists: a running `tint watch` then finds this
+            // wallpaper already themed, and a failed theme leaves the desktop alone.
+            if (wallpaperToo)
+            {
+                try
+                {
+                    WallpaperSetter.Set(path);
+                    Console.WriteLine("  ✓ set as the wallpaper");
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException or TimeoutException)
+                {
+                    return Terminal.Error(ex.Message);
+                }
+            }
+
+            return result.Reloads.All(r => r.Ok) ? 0 : 1;
         });
 
         return command;
     }
 
-    /// <summary>Applies and prints the outcome. Shared with <c>tint watch</c>.</summary>
-    internal static bool Run(string path, ApplyOptions options, bool compact)
+    /// <summary>Applies and prints the outcome; null if no theme could be made. Shared with <c>tint watch</c>.</summary>
+    internal static ApplyResult? Run(string path, ApplyOptions options, bool compact)
     {
         if (!compact)
         {
@@ -114,7 +124,7 @@ internal static class ApplyCommand
             or UnauthorizedAccessException or SixLabors.ImageSharp.ImageFormatException)
         {
             Terminal.Error(ex.Message);
-            return false;
+            return null;
         }
 
         Scheme s = result.Scheme;
@@ -141,7 +151,7 @@ internal static class ApplyCommand
             Console.Error.WriteLine($"  ! {warning}");
         }
 
-        return result.Reloads.All(r => r.Ok);
+        return result;
     }
 
     private static string ReloadSummary(IReadOnlyList<ReloadResult> reloads)

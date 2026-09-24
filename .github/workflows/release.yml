@@ -1,10 +1,10 @@
 name: Release
 
-# A push to main whose version (Directory.Build.props) has no release yet
-# builds the Mac files, publishes them as release vX.Y.Z, and updates the
-# Homebrew formula and cask. Pull requests build the same files without
-# publishing, so packaging problems show up before merging — the files are
-# attached to the run, for trying out.
+# Every pull request and push builds the Mac files (attached to the run, for
+# trying out) in a read-only job. A push to main whose version
+# (Directory.Build.props) has no release yet then publishes them as release
+# vX.Y.Z and updates the Homebrew formula and cask — in a separate job that
+# never runs pull-request code.
 
 on:
   push:
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -22,8 +22,12 @@ concurrency:
 jobs:
   package:
     runs-on: macos-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -31,16 +35,7 @@ jobs:
 
       - name: Version
         id: version
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if gh release view "v$version" > /dev/null 2>&1; then
-            echo "released=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "released=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)" >> "$GITHUB_OUTPUT"
 
       - name: Package for Apple silicon
         run: scripts/package.sh osx-arm64
@@ -56,7 +51,7 @@ jobs:
           "$RUNNER_TEMP/try/tint" palette assets/icon.png
           "$RUNNER_TEMP/try/tint" apply assets/icon.png --no-reload
           ditto -x -k dist/Tint-*-osx-arm64.zip "$RUNNER_TEMP/try"
-          codesign --verify --verbose "$RUNNER_TEMP/try/Tint.app"
+          codesign --verify --strict --verbose "$RUNNER_TEMP/try/Tint.app"
           test -x "$RUNNER_TEMP/try/Tint.app/Contents/MacOS/Tint"
 
       - uses: actions/upload-artifact@v4
@@ -64,17 +59,40 @@ jobs:
           name: tint-${{ steps.version.outputs.version }}-mac
           path: dist/
 
+  publish:
+    needs: package
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.package.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Already released?
+        id: check
+        run: |
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "v$VERSION is already released; nothing to do."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        if: steps.check.outputs.released == 'false'
+        with:
+          name: tint-${{ needs.package.outputs.version }}-mac
+          path: dist/
+
       - name: Publish the release
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.version.outputs.released == 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
+        if: steps.check.outputs.released == 'false'
         run: gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "tint $VERSION" --generate-notes
 
       - name: Update the Homebrew formula and cask
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.version.outputs.released == 'false'
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
+        if: steps.check.outputs.released == 'false'
         run: |
           scripts/homebrew.sh "$VERSION"
           git config user.name "github-actions[bot]"

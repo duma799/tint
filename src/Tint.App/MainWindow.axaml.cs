@@ -99,6 +99,17 @@ public partial class MainWindow : Window
         catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException
             or UnauthorizedAccessException or ImageFormatException)
         {
+            // Forget the previous image too: Apply must never use a different
+            // image from the one just asked for.
+            (Preview.Source as IDisposable)?.Dispose();
+            Preview.Source = null;
+            DropHint.IsVisible = true;
+            _image = null;
+            _palette = null;
+            _scheme = null;
+            FileName.Text = string.Empty;
+            SetWallpaper.IsEnabled = false;
+            ApplyButton.IsEnabled = false;
             Status.Text = $"Couldn't read it: {ex.Message}";
         }
     }
