@@ -34,7 +34,7 @@ public sealed class MainWindowTests : IDisposable
     {
         // TINT_SCREENSHOT_IMAGE: render a real wallpaper instead of the made-up one.
         string image = Environment.GetEnvironmentVariable("TINT_SCREENSHOT_IMAGE") ?? Sunset(Path.Combine(_dir, "sunset.png"));
-        var window = new MainWindow();
+        var window = new MainWindow(loadWallpaper: false);
         window.Show();
 
         await window.LoadImageAsync(image);
@@ -58,7 +58,7 @@ public sealed class MainWindowTests : IDisposable
     {
         string text = Path.Combine(_dir, "notes.txt");
         await File.WriteAllTextAsync(text, "hello");
-        var window = new MainWindow();
+        var window = new MainWindow(loadWallpaper: false);
         window.Show();
 
         await window.LoadImageAsync(text);

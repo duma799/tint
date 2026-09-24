@@ -34,6 +34,12 @@ public partial class MainWindow : Window
     private string? _currentWallpaper;
 
     public MainWindow()
+        : this(loadWallpaper: true)
+    {
+    }
+
+    /// <param name="loadWallpaper">Open on the current wallpaper. Tests turn it off, so the machine's own wallpaper stays out of them.</param>
+    internal MainWindow(bool loadWallpaper)
     {
         InitializeComponent();
 
@@ -57,7 +63,10 @@ public partial class MainWindow : Window
 
         ImageFrame.AddHandler(DragDrop.DropEvent, OnDrop);
         CurrentButton.IsEnabled = OperatingSystem.IsMacOS();
-        Opened += async (_, _) => await LoadCurrentWallpaperAsync();
+        if (loadWallpaper)
+        {
+            Opened += async (_, _) => await LoadCurrentWallpaperAsync();
+        }
     }
 
     /// <summary>The scheme on screen now; null until an image is loaded.</summary>

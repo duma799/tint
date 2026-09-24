@@ -42,12 +42,12 @@ iconutil -c icns "$iconset" -o "$app/Contents/Resources/tint.icns"
 # Apple silicon runs only signed code. An ad-hoc signature ("-") is enough
 # for that; it's not a Developer ID, so a downloaded copy still needs the
 # quarantine flag removed (the Homebrew cask does it).
-find "$app/Contents/MacOS" -type f | while read -r file; do
-  if file "$file" | grep -q 'Mach-O'; then
-    codesign --force --sign - "$file"
-  fi
-done
+# Every file in Contents/MacOS counts as code, .dll files too, and must be
+# signed before the bundle. The main executable is signed with the bundle:
+# signing it alone would try to sign the bundle before the rest are ready.
+find "$app/Contents/MacOS" -type f ! -path "$app/Contents/MacOS/Tint" -exec codesign --force --sign - {} +
 codesign --force --sign - "$app"
+codesign --verify --strict "$app"
 
 ditto -c -k --keepParent "$app" "dist/Tint-$version-$rid.zip"
 echo "==> dist/"
