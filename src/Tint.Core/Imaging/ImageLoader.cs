@@ -42,8 +42,8 @@ public static class ImageLoader
         if (!OperatingSystem.IsMacOS())
         {
             throw new NotSupportedException(
-                $"Can't read {Path.GetFileName(path)}: HEIC images are only supported on macOS for now. " +
-                "Convert it to JPG or PNG first.");
+                $"Can't read {Path.GetFileName(path)}: HEIC images are converted with macOS's sips, " +
+                "which isn't available here.");
         }
 
         return LoadViaSips(path);

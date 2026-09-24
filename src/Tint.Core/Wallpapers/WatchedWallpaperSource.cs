@@ -18,12 +18,11 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
     private ITimer? _poll;
     private string? _last;
     private string? _lastNotice;
-    private bool _superseded;
 
     protected WatchedWallpaperSource(TimeProvider? timeProvider = null)
     {
         _time = timeProvider ?? TimeProvider.System;
-        _debouncer = new Debouncer(SettleDelay, () => Check(fromFileEvent: true), _time);
+        _debouncer = new Debouncer(SettleDelay, Check, _time);
     }
 
     public abstract string Name { get; }
@@ -31,10 +30,7 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
     /// <summary>Directory whose changes mean "the wallpaper may have changed".</summary>
     protected abstract string WatchDirectory { get; }
 
-    /// <summary>File name filter inside <see cref="WatchDirectory"/>, e.g. "config.ini" or "*".</summary>
-    protected virtual string WatchFilter => "*";
-
-    /// <summary>Further directories whose changes should trigger a re-check (all files).</summary>
+    /// <summary>Further directories whose changes should trigger a re-check.</summary>
     protected virtual IEnumerable<string> ExtraWatchDirectories => [];
 
     public event EventHandler<WallpaperChangedEventArgs>? Changed;
@@ -45,43 +41,18 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
 
     public abstract string? Current();
 
-    /// <summary>
-    /// A file or folder whose modified time is when this source last set a
-    /// wallpaper. Null if there is no such marker.
-    /// </summary>
-    protected virtual string? StampPath => null;
-
-    public virtual DateTime? LastSetUtc
-    {
-        get
-        {
-            string? stamp = StampPath;
-            if (stamp is null)
-            {
-                return null;
-            }
-
-            if (File.Exists(stamp))
-            {
-                return File.GetLastWriteTimeUtc(stamp);
-            }
-
-            return Directory.Exists(stamp) ? Directory.GetLastWriteTimeUtc(stamp) : null;
-        }
-    }
-
     public void Start()
     {
         _last = SafeCurrent();
 
         if (Directory.Exists(WatchDirectory))
         {
-            Watch(WatchDirectory, WatchFilter);
+            Watch(WatchDirectory);
         }
         else
         {
             // Better slow than blind: if the expected directory isn't there
-            // (a different OS version, say), fall back to asking periodically.
+            // (a different macOS version, say), fall back to asking periodically.
             OnTrace($"{WatchDirectory} not found — checking every {PollInterval.TotalSeconds:0} s instead");
             _poll = _time.CreateTimer(_ => Check(), state: null, PollInterval, PollInterval);
         }
@@ -90,7 +61,7 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
         {
             if (Directory.Exists(extra))
             {
-                Watch(extra, "*");
+                Watch(extra);
             }
             else
             {
@@ -129,47 +100,27 @@ public abstract class WatchedWallpaperSource : IWallpaperSource
         Notice?.Invoke(message);
     }
 
-    /// <summary>
-    /// Another source on the same machine took over the screen. From now on,
-    /// if this source's tool writes again — even the same picture as before —
-    /// that is a real change and gets reported.
-    /// </summary>
-    internal void MarkSuperseded()
-    {
-        lock (_gate)
-        {
-            _superseded = true;
-        }
-    }
-
-    /// <summary>
-    /// Re-reads the wallpaper and raises <see cref="Changed"/> if it moved on.
-    /// <paramref name="fromFileEvent"/> is true when the tool actually wrote
-    /// something (as opposed to a periodic poll); only then does re-setting the
-    /// same picture after being superseded count as a change.
-    /// </summary>
-    internal void Check(bool fromFileEvent = false)
+    /// <summary>Re-reads the wallpaper and raises <see cref="Changed"/> if it moved on.</summary>
+    internal void Check()
     {
         string? current = SafeCurrent();
         lock (_gate)
         {
-            bool resetAfterTakeover = fromFileEvent && _superseded;
-            if (current is null || (current == _last && !resetAfterTakeover))
+            if (current is null || current == _last)
             {
                 return;
             }
 
             _last = current;
-            _superseded = false;
             _lastNotice = null; // a readable wallpaper again: allow the same notice next time
         }
 
         Changed?.Invoke(this, new WallpaperChangedEventArgs(current));
     }
 
-    private void Watch(string directory, string filter)
+    private void Watch(string directory)
     {
-        var watcher = new FileSystemWatcher(directory, filter)
+        var watcher = new FileSystemWatcher(directory)
         {
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName

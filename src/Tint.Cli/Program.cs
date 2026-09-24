@@ -1,7 +1,7 @@
 using System.CommandLine;
 using Tint.Cli.Commands;
 
-var root = new RootCommand("tint — colour themes from your wallpaper, for macOS and Linux.");
+var root = new RootCommand("tint — colour themes from your wallpaper, for macOS.");
 root.Subcommands.Add(ApplyCommand.Create());
 root.Subcommands.Add(PaletteCommand.Create());
 root.Subcommands.Add(WallpaperCommand.Create());
