@@ -122,6 +122,23 @@ public sealed class OutputTests : IDisposable
     }
 
     [Fact]
+    public void Awkward_paths_cannot_break_out_of_vim_or_css_strings()
+    {
+        const string Nasty = "/w/a\\\" | call system('x')\n\"b.jpg";
+        PywalWriter.Write(Scheme, Nasty, _dir, templatesDirectory: null);
+
+        // Every line of the Vim file must still be a comment, blank, or a single `let`.
+        foreach (string line in File.ReadAllLines(Path.Combine(_dir, "colors-wal.vim")))
+        {
+            Assert.True(line.Length == 0 || line.StartsWith('"') || line.StartsWith("let ", StringComparison.Ordinal), line);
+        }
+
+        Assert.Equal("/w/a\\\\\\\" | call system('x')\\n\\\"b.jpg", PywalWriter.VimString(Nasty));
+        Assert.Equal("/w/a\\\\\\\" | call system('x')\\A \\\"b.jpg", PywalWriter.CssString(Nasty));
+        Assert.DoesNotContain('\n', File.ReadAllText(Path.Combine(_dir, "colors.css")).Split("--wallpaper")[1].Split(';')[0]);
+    }
+
+    [Fact]
     public void Hook_runs_with_the_wallpaper_and_mode_in_its_environment()
     {
         if (OperatingSystem.IsWindows())
