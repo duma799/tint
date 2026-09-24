@@ -7,8 +7,8 @@ struct SetupTests {
 
     @Test func settingsRoundTrip() throws {
         let dir = TempDir()
-        try TintSettings(mode: nil, saturation: 1.25).save(to: dir.file("settings.json"))
-        #expect(TintSettings.load(from: dir.file("settings.json")) == TintSettings(mode: nil, saturation: 1.25))
+        try TintSettings(mode: .system, saturation: 1.25).save(to: dir.file("settings.json"))
+        #expect(TintSettings.load(from: dir.file("settings.json")) == TintSettings(mode: .system, saturation: 1.25))
     }
 
     @Test(arguments: ["not json", "[1, 2]", "{\"mode\": 3}"])
@@ -22,6 +22,17 @@ struct SetupTests {
         #expect(TintSettings.load(from: dir.file("none.json")) == TintSettings())
         let loaded = TintSettings.load(from: dir.write("settings.json", "{\"mode\": \"light\", \"saturation\": 9}"))
         #expect(loaded == TintSettings(mode: .light, saturation: 1.5))
+    }
+
+    @Test func modePreferencesResolve() {
+        let dark = palette("#10141f", "#1b2233", "#2a3450"), light = palette("#f4efe6", "#d8d2c4", "#b0a890")
+        #expect(ModePreference.dark.resolve(for: light) == .dark)
+        #expect(ModePreference.light.resolve(for: dark) == .light)
+        #expect(ModePreference.auto.resolve(for: dark) == .dark)
+        #expect(ModePreference.auto.resolve(for: light) == .light)
+        #expect(ModePreference.system.resolve(for: dark, systemIsDark: { false }) == .light)
+        #expect(ModePreference.system.resolve(for: light, systemIsDark: { true }) == .dark)
+        #expect(ModePreference(name: "nonsense") == .dark)
     }
 
     @Test func hookRunsWithTheWallpaperAndModeInItsEnvironment() {
@@ -90,6 +101,7 @@ struct SetupTests {
         options.cacheDirectory = dir.file("wal")
         options.templatesDirectory = nil
         options.apolloShellThemes = nil
+        options.editors = nil
         let result = try ThemeApplier.apply(palette: SchemeTests.night, wallpaper: "/walls/koi.jpg", options: options, reloaders: [])
 
         #expect(result.scheme.mode == .light)

@@ -13,15 +13,15 @@ struct Tint: ParsableCommand {
 
 /// --mode and --saturation, shared by apply and watch.
 struct ThemeOptions: ParsableArguments {
-    @Option(name: .shortAndLong, help: "dark, light or auto (from the image's brightness). Default: your saved setting, else dark.")
+    @Option(name: .shortAndLong, help: "dark, light, auto (from the image) or system (follow macOS). Default: your saved setting, else dark.")
     var mode: String?
 
     @Option(name: .shortAndLong, help: "Accent saturation, 0.5–1.5 (1 = the image's own). Default: your saved setting, else 1.")
     var saturation: Double?
 
     func validate() throws {
-        if let mode, !["dark", "light", "auto"].contains(mode) {
-            throw ValidationError("--mode must be dark, light or auto.")
+        if let mode, ModePreference(rawValue: mode) == nil {
+            throw ValidationError("--mode must be dark, light, auto or system.")
         }
         if let saturation, !SchemeBuilder.saturationRange.contains(saturation) {
             throw ValidationError("--saturation must be between 0.5 and 1.5.")

@@ -15,7 +15,9 @@ public final class WallpaperWatcher: @unchecked Sendable {
     private let locate: Locate
     private let directories: [String]
     private let settle: TimeInterval
-    private let queue = DispatchQueue(label: "tint.watcher")
+    /// Where changes are handled, one at a time. Other work that must not
+    /// overlap with an apply (a re-theme on an appearance change) runs here too.
+    public let queue = DispatchQueue(label: "tint.watcher")
     private var pending: DispatchWorkItem?
     private var last: String?
     private var poll: DispatchSourceTimer?

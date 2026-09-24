@@ -28,7 +28,7 @@ struct MenuBarView: View {
             }
 
             Picker("Mode", selection: $model.mode) {
-                ForEach(ModeChoice.allCases) { Text($0.label).tag($0) }
+                ForEach(ModePreference.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -47,6 +47,11 @@ struct MenuBarView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
+
+            Toggle("Open at login", isOn: Binding(
+                get: { model.openAtLogin },
+                set: { model.setOpenAtLogin($0) }))
+                .font(.caption)
 
             Divider()
 

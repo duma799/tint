@@ -4,30 +4,18 @@ import Foundation
 /// saved in `~/.config/tint/settings.json`. The app writes them, so a mode
 /// picked there sticks for the login service too.
 public struct TintSettings: Equatable, Sendable {
-    /// Dark or light; nil picks from the image's brightness ("auto").
-    public var mode: ThemeMode? = .dark
+    /// Dark, light, from the image (auto) or from macOS (system).
+    public var mode: ModePreference = .dark
 
     /// Accent saturation, see `SchemeBuilder.build`.
     public var saturation: Double = 1
 
-    public init(mode: ThemeMode? = .dark, saturation: Double = 1) {
+    public init(mode: ModePreference = .dark, saturation: Double = 1) {
         self.mode = mode
         self.saturation = saturation
     }
 
     public static var defaultPath: String { TintPaths.config + "/settings.json" }
-
-    /// "dark", "light" or "auto".
-    public static func modeName(_ mode: ThemeMode?) -> String { mode?.rawValue ?? "auto" }
-
-    /// The reverse of `modeName`; anything unknown is dark.
-    public static func parseMode(_ name: String?) -> ThemeMode? {
-        switch name {
-        case "light": .light
-        case "auto": nil
-        default: .dark
-        }
-    }
 
     /// Reads the settings. A missing or broken file gives the defaults: settings must never stop a theme.
     public static func load(from path: String = defaultPath) -> TintSettings {
@@ -37,7 +25,7 @@ public struct TintSettings: Equatable, Sendable {
         else { return settings }
 
         if let mode = root["mode"] as? String {
-            settings.mode = parseMode(mode)
+            settings.mode = ModePreference(name: mode)
         }
         if let saturation = root["saturation"] as? Double {
             settings.saturation = min(max(saturation, SchemeBuilder.saturationRange.lowerBound), SchemeBuilder.saturationRange.upperBound)
@@ -48,7 +36,7 @@ public struct TintSettings: Equatable, Sendable {
     public func save(to path: String = defaultPath) throws {
         try FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
         let rounded = (saturation * 100).rounded() / 100
-        let json = "{\n  \"mode\": \"\(TintSettings.modeName(mode))\",\n  \"saturation\": \(rounded)\n}\n"
+        let json = "{\n  \"mode\": \"\(mode.rawValue)\",\n  \"saturation\": \(rounded)\n}\n"
         try PywalWriter.atomicWrite(json, to: path)
     }
 }
@@ -56,6 +44,6 @@ public struct TintSettings: Equatable, Sendable {
 extension TintSettings: CustomStringConvertible {
     public var description: String {
         let s = (saturation * 100).rounded() / 100
-        return "\(TintSettings.modeName(mode)), saturation \(s == s.rounded() ? String(Int(s)) : String(s))"
+        return "\(mode.rawValue), saturation \(s == s.rounded() ? String(Int(s)) : String(s))"
     }
 }

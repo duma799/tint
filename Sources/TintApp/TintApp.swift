@@ -15,6 +15,8 @@ struct TintApp: App {
         }
         .defaultSize(width: 1180, height: 800)
         .windowStyle(.hiddenTitleBar)
+        // Opened at login, tint lives in the menu bar; its window opens from there.
+        .defaultLaunchBehavior(model.openAtLogin ? .suppressed : .presented)
 
         // Always there: the current scheme, a mode switch, re-theme now.
         MenuBarExtra("tint", systemImage: "drop.fill") {

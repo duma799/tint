@@ -1,8 +1,8 @@
 import Foundation
 
 public struct ApplyOptions: Sendable {
-    /// Dark or light; nil picks from the image's brightness.
-    public var mode: ThemeMode? = .dark
+    /// Dark, light, from the image (auto) or from macOS (system).
+    public var mode: ModePreference = .dark
 
     /// Accent saturation, 0.5–1.5; see `SchemeBuilder.build`.
     public var saturation: Double = 1
@@ -16,7 +16,10 @@ public struct ApplyOptions: Sendable {
     /// ApolloShell's themes folder; nil to not write a shell theme.
     public var apolloShellThemes: String? = TintPaths.apolloShellThemes
 
-    public init(mode: ThemeMode? = .dark, saturation: Double = 1, reload: Bool = true) {
+    /// Where to look for editors to theme (Zed, VS Code, Antigravity, Gemini CLI); nil for none.
+    public var editors: EditorThemes.Paths? = EditorThemes.Paths()
+
+    public init(mode: ModePreference = .dark, saturation: Double = 1, reload: Bool = true) {
         self.mode = mode
         self.saturation = saturation
         self.reload = reload
@@ -26,7 +29,7 @@ public struct ApplyOptions: Sendable {
     public static func resolved(mode: String?, saturation: Double?, reload: Bool = true) -> ApplyOptions {
         let saved = TintSettings.load()
         return ApplyOptions(
-            mode: mode.map(TintSettings.parseMode) ?? saved.mode,
+            mode: mode.map { ModePreference(name: $0) } ?? saved.mode,
             saturation: saturation ?? saved.saturation,
             reload: reload)
     }
@@ -50,7 +53,7 @@ public enum ThemeApplier {
 
     /// Everything after palette extraction — for callers that already have the palette (the app).
     public static func apply(palette: Palette, wallpaper: String, options: ApplyOptions, reloaders: [any Reloader]? = nil) throws -> ApplyResult {
-        let mode = options.mode ?? (palette.isDark ? .dark : .light)
+        let mode = options.mode.resolve(for: palette)
         let scheme = try SchemeBuilder.build(palette, mode: mode, saturation: options.saturation)
 
         let files = try PywalWriter.write(scheme, wallpaper: wallpaper, to: options.cacheDirectory, templates: options.templatesDirectory)
@@ -64,6 +67,12 @@ public enum ThemeApplier {
             } catch {
                 warnings.append("couldn't write the ApolloShell theme: \(error.localizedDescription)")
             }
+        }
+
+        if let paths = options.editors {
+            let editors = EditorThemes.write(scheme, paths: paths)
+            written += editors.written
+            warnings += editors.warnings
         }
 
         let context = ReloadContext(scheme: scheme, wallpaper: wallpaper, cacheDirectory: options.cacheDirectory)
