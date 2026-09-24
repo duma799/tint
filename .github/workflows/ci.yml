@@ -11,13 +11,7 @@ concurrency:
 
 jobs:
   test:
-    # The platform-specific code (wallpaper sources, services) must build and
-    # pass on both systems tint supports.
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
 
@@ -28,7 +22,6 @@ jobs:
       - run: dotnet restore
 
       - name: Check formatting
-        if: runner.os == 'Linux'
         run: dotnet format --verify-no-changes --no-restore
 
       - run: dotnet build --configuration Release --no-restore

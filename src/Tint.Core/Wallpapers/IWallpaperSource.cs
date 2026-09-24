@@ -6,22 +6,17 @@ public sealed class WallpaperChangedEventArgs(string path) : EventArgs
 }
 
 /// <summary>
-/// Knows where the current wallpaper is and says when it changes. There is one
-/// implementation per platform; the rest of tint only ever sees this interface.
+/// Knows where the current wallpaper is and says when it changes. The real
+/// one is <see cref="MacWallpaperSource"/>; the interface lets tests (and the
+/// rest of tint) work without a Mac's wallpaper service.
 /// </summary>
 public interface IWallpaperSource : IDisposable
 {
-    /// <summary>Human-readable name, e.g. "macOS" or "waypaper".</summary>
+    /// <summary>Human-readable name, e.g. "macOS".</summary>
     string Name { get; }
 
     /// <summary>Path of the current wallpaper, or null if it can't be determined.</summary>
     string? Current();
-
-    /// <summary>
-    /// When this source last set a wallpaper, if it can tell. Used to decide
-    /// which of several sources on one machine set the wallpaper on screen.
-    /// </summary>
-    DateTime? LastSetUtc => null;
 
     /// <summary>Raised once per actual change, after bursts of file events have settled.</summary>
     event EventHandler<WallpaperChangedEventArgs>? Changed;

@@ -7,8 +7,8 @@ namespace Tint.Core.Output;
 
 /// <summary>
 /// Writes the files pywal writes to <c>~/.cache/wal</c>, in pywal's formats,
-/// so everything that reads them — kitty, Neovim (pywal.nvim), pywalfox,
-/// wal-gtk, shell scripts — works with tint unchanged.
+/// so everything that reads them — SketchyBar and JankyBorders configs,
+/// Neovim (pywal.nvim), kitty, shell scripts — works with tint unchanged.
 /// </summary>
 public static class PywalWriter
 {
@@ -32,7 +32,6 @@ public static class PywalWriter
         Save("colors.json", Json(scheme, wallpaper));
         Save("colors.sh", Shell(scheme, wallpaper));
         Save("colors.css", Css(scheme, wallpaper));
-        Save("colors-waybar.css", Waybar(scheme));
         Save("colors-kitty.conf", Kitty(scheme));
         Save("colors-wal.vim", Vim(scheme, wallpaper));
 
@@ -140,18 +139,6 @@ public static class PywalWriter
         }
 
         sb.Append("}\n");
-        return sb.ToString();
-    }
-
-    private static string Waybar(Scheme scheme)
-    {
-        var sb = new StringBuilder();
-        sb.Append($"@define-color foreground {scheme.Foreground.Hex};\n@define-color background {scheme.Background.Hex};\n@define-color cursor {scheme.Cursor.Hex};\n\n");
-        foreach ((string name, Rgb color) in Numbered(scheme))
-        {
-            sb.Append($"@define-color {name} {color.Hex};\n");
-        }
-
         return sb.ToString();
     }
 

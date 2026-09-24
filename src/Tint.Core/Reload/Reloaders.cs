@@ -19,23 +19,12 @@ public interface IReloader
 
 public static class Reloaders
 {
-    /// <summary>The reload steps for this OS, in order, ending with the user's hook.</summary>
-    public static IReadOnlyList<IReloader> ForCurrentPlatform()
-    {
-        var list = new List<IReloader>();
-        if (OperatingSystem.IsLinux())
-        {
-            list.Add(new CommandReloader("Hyprland", "hyprctl", ["reload"],
-                requires: () => Environment.GetEnvironmentVariable("HYPRLAND_INSTANCE_SIGNATURE") is { Length: > 0 },
-                whyNot: "not running inside Hyprland"));
-            list.Add(new CommandReloader("kitty", "pkill", ["-USR1", "-x", "kitty"], notRunningExitCode: 1));
-            list.Add(new GtkColorSchemeReloader());
-            list.Add(new CommandReloader("Firefox (pywalfox)", "pywalfox", ["update"]));
-        }
-
-        list.Add(new HookReloader());
-        return list;
-    }
+    /// <summary>
+    /// The reload steps, in order. Built-in macOS app reloads (SketchyBar,
+    /// JankyBorders, Ghostty) are still to come; until then the user's hook
+    /// covers them.
+    /// </summary>
+    public static IReadOnlyList<IReloader> ForCurrentPlatform() => [new HookReloader()];
 }
 
 /// <summary>Runs one command, if it's installed.</summary>
@@ -77,28 +66,6 @@ public sealed class CommandReloader(
         {
             return new ReloadResult(name, Ok: false, Skipped: false, ex.Message);
         }
-    }
-}
-
-/// <summary>Tells GTK apps to prefer dark or light, matching the scheme.</summary>
-public sealed class GtkColorSchemeReloader : IReloader
-{
-    public string Name => "GTK dark/light";
-
-    public ReloadResult Reload(ReloadContext context)
-    {
-        string preference = context.Scheme.Mode == ThemeMode.Dark ? "prefer-dark" : "prefer-light";
-        ReloadResult result = new CommandReloader(Name, "gsettings", ["set", "org.gnome.desktop.interface", "color-scheme", preference])
-            .Reload(context);
-
-        // gsettings can be installed without GNOME's schemas (common on
-        // Hyprland setups): nothing to set, which isn't a failure.
-        if (!result.Ok && result.Detail.Contains("No such schema", StringComparison.Ordinal))
-        {
-            return new ReloadResult(Name, Ok: true, Skipped: true, "GNOME settings schema not installed");
-        }
-
-        return result is { Ok: true, Skipped: false } ? result with { Detail = preference } : result;
     }
 }
 

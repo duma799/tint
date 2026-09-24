@@ -50,25 +50,15 @@ public sealed class OutputTests : IDisposable
     }
 
     [Fact]
-    public void The_real_hyprland_template_renders_completely()
+    public void A_sketchybar_template_renders_to_argb_values_and_literal_braces()
     {
         TemplateRenderer.Result result = TemplateRenderer.Render(
-            File.ReadAllText(Path.Combine(Fixtures, "hyprland-colors.conf")), Scheme, "/w.jpg");
+            File.ReadAllText(Path.Combine(Fixtures, "sketchybar-colors.sh")), Scheme, "/w.jpg");
 
         Assert.Empty(result.Unknown);
-        Assert.Contains($"col.active_border = rgba({Scheme[4].Hex[1..]}ee) rgba({Scheme[6].Hex[1..]}ee) 45deg", result.Text);
-        Assert.Contains("general {\n", result.Text);
-    }
-
-    [Fact]
-    public void The_real_caelestia_template_renders_to_valid_json()
-    {
-        TemplateRenderer.Result result = TemplateRenderer.Render(
-            File.ReadAllText(Path.Combine(Fixtures, "caelestia-scheme.json")), Scheme, "/w.jpg");
-
-        Assert.Empty(result.Unknown);
-        using JsonDocument json = JsonDocument.Parse(result.Text);
-        Assert.Equal(Scheme[4].Hex[1..], json.RootElement.GetProperty("colours").GetProperty("primary").GetString());
+        Assert.Contains($"export BAR_COLOR=0xee{Scheme.Background.Hex[1..]}", result.Text);
+        Assert.Contains($"export ACCENT_COLOR=0xff{Scheme[4].Hex[1..]}", result.Text);
+        Assert.Contains("bar_color() { printf", result.Text);
     }
 
     [Fact]
@@ -78,8 +68,8 @@ public sealed class OutputTests : IDisposable
 
         string[] expected =
         [
-            "wal", "colors", "colors.json", "colors.sh", "colors.css", "colors-waybar.css", "colors-kitty.conf",
-            "colors-wal.vim", "caelestia-scheme.json", "hyprland-colors.conf",
+            "wal", "colors", "colors.json", "colors.sh", "colors.css", "colors-kitty.conf", "colors-wal.vim",
+            "sketchybar-colors.sh",
         ];
         Assert.Equal(expected.Order(), result.Written.Select(Path.GetFileName).Order()!);
         Assert.Empty(result.Warnings);
