@@ -24,6 +24,8 @@ final class AppModel {
     var mode: ModeChoice
     var saturation: Double
     var setAsWallpaper = false
+    /// The "Open image…" file picker is showing.
+    var importing = false
     var status = ""
     var busy = false
     var currentWallpaper: String?

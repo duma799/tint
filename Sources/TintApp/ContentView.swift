@@ -9,7 +9,6 @@ import UniformTypeIdentifiers
 /// scheme's colours, so what you see is what you'll get.
 struct ContentView: View {
     @Bindable var model: AppModel
-    @State private var importing = false
 
     var body: some View {
         let scheme = model.scheme
@@ -29,7 +28,7 @@ struct ContentView: View {
         .tint(scheme.map { Color($0[4]) } ?? Color.accentColor)
         .preferredColorScheme(scheme?.mode == .light ? .light : .dark)
         .animation(.easeInOut(duration: 0.25), value: scheme)
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.image]) { result in
+        .fileImporter(isPresented: $model.importing, allowedContentTypes: [.image]) { result in
             if case .success(let url) = result {
                 Task { await model.load(url.path) }
             }
@@ -58,7 +57,7 @@ struct ContentView: View {
 
             HStack(spacing: 8) {
                 Button("Current wallpaper") { Task { await model.loadCurrentWallpaper() } }
-                Button("Open image…") { importing = true }
+                Button("Open image…") { model.importing = true }
                 Text(model.imagePath ?? "")
                     .lineLimit(1)
                     .truncationMode(.middle)

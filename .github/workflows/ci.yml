@@ -29,6 +29,16 @@ jobs:
       - name: Test
         run: swift test
 
+      # Many Macs have only the Command Line Tools, not full Xcode; some
+      # SwiftUI macros (@State…) only ship with Xcode. Build that way too.
+      - name: Build with the Command Line Tools only
+        run: |
+          if [ -d /Library/Developer/CommandLineTools ]; then
+            DEVELOPER_DIR=/Library/Developer/CommandLineTools swift build --scratch-path .build-clt
+          else
+            echo "no Command Line Tools on this runner; skipped"
+          fi
+
       - name: Smoke test the command
         run: |
           .build/debug/tint --version

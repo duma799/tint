@@ -5,7 +5,9 @@ import TintCore
 
 @main
 struct TintApp: App {
-    @State private var model = AppModel()
+    // A plain constant, not @State: the App is created once, and @State is a
+    // macro whose plugin only ships with full Xcode, not the Command Line Tools.
+    private let model = AppModel()
 
     var body: some Scene {
         Window("tint", id: "main") {
