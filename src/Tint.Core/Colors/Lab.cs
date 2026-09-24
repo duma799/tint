@@ -67,6 +67,29 @@ public readonly record struct Lab(double L, double A, double B)
     /// <summary>CIE76 ΔE: about 2.3 is the smallest difference most people notice.</summary>
     public double DistanceTo(Lab other) => Math.Sqrt(DistanceSquared(other));
 
+    /// <summary>Colourfulness: 0 for greys, 30+ for clearly coloured, 100+ for vivid.</summary>
+    public double Chroma => Math.Sqrt((A * A) + (B * B));
+
+    /// <summary>Hue angle in degrees, 0..360 (≈40 red, 100 yellow, 136 green, 196 cyan, 306 blue).</summary>
+    public double Hue => (Math.Atan2(B, A) * 180 / Math.PI + 360) % 360;
+
+    /// <summary>Builds a colour from lightness, chroma and hue (the LCh form of Lab).</summary>
+    public static Lab FromLch(double l, double chroma, double hue)
+    {
+        double radians = hue * Math.PI / 180;
+        return new Lab(l, chroma * Math.Cos(radians), chroma * Math.Sin(radians));
+    }
+
+    /// <summary>Same hue, chroma capped at <paramref name="max"/>.</summary>
+    public Lab WithMaxChroma(double max)
+    {
+        double chroma = Chroma;
+        return chroma <= max || chroma == 0 ? this : this with { A = A * max / chroma, B = B * max / chroma };
+    }
+
+    /// <summary>sRGB byte → linear light (0..1), shared with the contrast maths.</summary>
+    internal static double ToLinear(byte channel) => LinearLut[channel];
+
     private static double F(double t) => t > Epsilon ? Math.Cbrt(t) : ((Kappa * t) + 16) / 116;
 
     private static double FInverse(double t)
