@@ -59,6 +59,10 @@ tint apply ~/Pictures/city.jpg  # …or from any image
 tint apply city.jpg -w          # …and make it the wallpaper too
 tint apply -m light -s 1.2      # light scheme, a bit more colourful
 tint apply -m system            # dark or light, following macOS
+tint back                       # didn't like it? bring back the previous theme (and wallpaper)
+tint history                    # the latest themes
+tint pause / tint resume        # leave wallpaper changes alone for a while
+tint displays                   # with several displays: which one drives the theme
 tint watch                      # re-theme on every wallpaper change (in this terminal)
 tint service install            # …the same, in the background from login
 tint doctor                     # what's set up, what isn't, what to fix
@@ -131,12 +135,29 @@ colour to copy it. It also shows whether the login service is on, and turns it
 on.
 
 The **menu bar item** (a drop) shows the current colours, switches the mode,
-and re-themes from the wallpaper in one click.
+re-themes from the wallpaper in one click, goes **Back**, **pauses**
+watching, lists **recent** themes to bring back, and opens the log.
 
 **Open at login** (in the window or the menu bar) starts tint with your Mac,
 as a menu bar item only; open the window from there.
 
 ![The tint app](assets/app.png)
+
+### History
+
+Every theme tint applies is remembered (the last 30, in
+`~/.config/tint/history.json`): the image, the mode and the saturation.
+`tint back` brings back the previous one — and its wallpaper, if you had
+changed it — and forgets the one you undid; `tint back 3` goes further.
+`tint history` lists them; the menu bar's **Recent** brings any of them back.
+
+### Several displays
+
+tint makes one theme (terminals and bars can't be coloured per display), from
+one display's wallpaper: the main one (with the menu bar) unless you pick
+another with `tint displays --use 2` (or part of its name). macOS stores a
+wallpaper per display with the date it was set; tint reads the newest
+setting that applies to the chosen display.
 
 ## How the wallpaper is found
 
@@ -189,6 +210,23 @@ matches how different colours *look* — and k-means groups them into 16
 clusters. Each cluster's average is a palette colour, and its size is how much
 of the image it covers. Seeding is fixed, so the same image always yields the
 same palette.
+
+## Signing releases
+
+Releases are signed ad hoc unless the repository has these secrets — then the
+Release workflow signs them with your **Developer ID** (hardened runtime) and
+**notarizes** them, so macOS opens them without any quarantine workaround:
+
+| Secret | What |
+|---|---|
+| `MACOS_CERTIFICATE` | your "Developer ID Application" certificate exported as .p12, base64: `base64 -i cert.p12 \| pbcopy` |
+| `MACOS_CERTIFICATE_PASSWORD` | the .p12's password |
+| `MACOS_SIGN_IDENTITY` | e.g. `Developer ID Application: Your Name (TEAMID)` |
+| `APPLE_ID`, `APPLE_TEAM_ID` | your Apple ID e-mail and team ID |
+| `APPLE_APP_PASSWORD` | an app-specific password from account.apple.com |
+
+A Developer ID needs the Apple Developer Program. Locally,
+`TINT_SIGN_IDENTITY=… scripts/package.sh` signs the same way.
 
 ## Development
 

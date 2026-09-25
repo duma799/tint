@@ -31,6 +31,10 @@ struct Watch: ParsableCommand {
         watcher.onChange = { path in
             Terminal.log("wallpaper changed → \(path)")
             Notices.shared.reset()
+            if apply && Pause.isPaused {
+                Terminal.log("paused — leaving it alone (`tint resume`)")
+                return
+            }
             if apply {
                 // Something else (`tint apply -w`, the app) already themed from
                 // this image, maybe with other options: keep that.
@@ -57,7 +61,7 @@ struct Watch: ParsableCommand {
             forName: SystemAppearance.changedNotification, object: nil, queue: nil
         ) { _ in
             let options = ApplyOptions.resolved(mode: mode, saturation: saturation)
-            guard apply, options.mode == .system, let path = ThemeApplier.lastApplied() else { return }
+            guard apply, !Pause.isPaused, options.mode == .system, let path = ThemeApplier.lastApplied() else { return }
             Terminal.log("macOS switched to \(SystemAppearance.isDark() ? "dark" : "light") mode")
             watcher.queue.async { _ = Apply.run(path, options, compact: true) }
         }

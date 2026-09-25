@@ -16,6 +16,9 @@ public struct ApplyOptions: Sendable {
     /// ApolloShell's themes folder; nil to not write a shell theme.
     public var apolloShellThemes: String? = TintPaths.apolloShellThemes
 
+    /// Where to remember applied themes (`tint back`); nil to not record this one.
+    public var history: String? = ThemeHistory.defaultPath
+
     /// Where to look for editors to theme (Zed, VS Code, Antigravity, Gemini CLI); nil for none.
     public var editors: EditorThemes.Paths? = EditorThemes.Paths()
 
@@ -75,6 +78,15 @@ public enum ThemeApplier {
             warnings += editors.warnings
         }
 
+        if let history = options.history {
+            let entry = HistoryEntry(wallpaper: wallpaper, mode: mode, saturation: options.saturation, colors: scheme.colors.map(\.hex))
+            do {
+                try ThemeHistory.record(entry, to: history)
+            } catch {
+                warnings.append("couldn't save the theme history: \(error.localizedDescription)")
+            }
+        }
+
         let context = ReloadContext(scheme: scheme, wallpaper: wallpaper, cacheDirectory: options.cacheDirectory)
         let reloads = options.reload ? (reloaders ?? Reloaders.all()).map { $0.reload(context) } : []
 
@@ -84,5 +96,40 @@ public enum ThemeApplier {
     /// The image the current theme was made from (pywal's `wal` file), or nil.
     public static func lastApplied(cacheDirectory: String = TintPaths.walCache) -> String? {
         (try? String(contentsOfFile: cacheDirectory + "/wal", encoding: .utf8))?.trimmingWhitespace()
+    }
+
+    /// Brings back a theme from the history: the same image, mode and
+    /// saturation — and the image as the wallpaper again, if it's a file you
+    /// chose (not one of macOS's rendered snapshots) and isn't already.
+    /// - Parameter record: add it to the history as the newest (a pick from
+    ///   "Recent"); `tint back` doesn't, it removes the undone one instead.
+    public static func restore(_ entry: HistoryEntry, base: ApplyOptions = ApplyOptions(), record: Bool) throws -> ApplyResult {
+        var options = base
+        options.mode = entry.mode == .dark ? .dark : .light
+        options.saturation = entry.saturation
+        if !record { options.history = nil }
+        let result = try apply(image: entry.wallpaper, options: options)
+
+        #if os(macOS)
+        // After applying, so a running `tint watch` finds it already themed.
+        let isSnapshot = entry.wallpaper.contains("com.apple.wallpaper.caches")
+        if !isSnapshot, TintPaths.exists(entry.wallpaper), MacWallpaper.current().path != entry.wallpaper {
+            try MacWallpaper.set(entry.wallpaper)
+        }
+        #endif
+        return result
+    }
+
+    /// Undoes the latest theme: brings back the one before it (`steps` back)
+    /// and drops the undone ones from the history.
+    public static func back(steps: Int = 1, base: ApplyOptions = ApplyOptions(), historyPath: String = ThemeHistory.defaultPath) throws -> (HistoryEntry, ApplyResult)? {
+        let entries = ThemeHistory.load(from: historyPath)
+        guard steps >= 1, entries.count > steps else { return nil }
+        let target = entries[steps]
+        var options = base
+        options.history = nil
+        let result = try restore(target, base: options, record: false)
+        try ThemeHistory.save(Array(entries.dropFirst(steps)), to: historyPath)
+        return (target, result)
     }
 }

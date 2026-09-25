@@ -41,6 +41,50 @@ struct MenuBarView: View {
             }
             .disabled(model.busy)
 
+            HStack {
+                Button {
+                    Task { await model.back() }
+                } label: {
+                    Label("Back", systemImage: "arrow.uturn.backward")
+                }
+                .disabled(model.busy || model.history.count < 2)
+                .help("Bring back the previous theme")
+
+                Spacer()
+
+                Toggle("Pause", isOn: Binding(get: { model.paused }, set: { model.setPaused($0) }))
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .help("Leave wallpaper changes alone for now")
+            }
+
+            if model.history.count > 1 {
+                Text("RECENT").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                ForEach(Array(model.history.dropFirst().prefix(5).enumerated()), id: \.offset) { _, entry in
+                    Button {
+                        Task { await model.restore(entry) }
+                    } label: {
+                        HStack(spacing: 8) {
+                            HStack(spacing: 0) {
+                                ForEach(Array(entry.colors.prefix(8).enumerated()), id: \.offset) { _, hex in
+                                    Rectangle().fill(Rgb(hex: hex).map(Color.init) ?? .clear)
+                                }
+                            }
+                            .frame(width: 64, height: 12)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            Text((entry.wallpaper as NSString).lastPathComponent)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .font(.caption)
+                            Spacer(minLength: 0)
+                            Text(entry.mode.rawValue).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.busy)
+                }
+            }
+
             if !model.status.isEmpty {
                 Text(model.status.split(separator: "\n").first.map(String.init) ?? "")
                     .font(.caption)
@@ -61,12 +105,14 @@ struct MenuBarView: View {
                     NSApp.activate(ignoringOtherApps: true)
                 }
                 Spacer()
+                Button("Log") { model.openLog() }
                 Button("Quit") { NSApp.terminate(nil) }
             }
         }
         .padding(14)
         .frame(width: 280)
         .task { await model.start() }
+        .onAppear { model.refreshHistory() }
     }
 }
 #endif

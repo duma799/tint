@@ -34,12 +34,36 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/tint.icns"
 
-# Apple silicon runs only signed code. An ad-hoc signature ("-") is enough
-# for that; it's not a Developer ID, so a downloaded copy still needs the
-# quarantine flag removed (the Homebrew cask does it).
-codesign --force --sign - "$work/tint"
-codesign --force --sign - "$app"
+# Signing. With TINT_SIGN_IDENTITY set to a Developer ID ("Developer ID
+# Application: Name (TEAMID)"), both are signed with the hardened runtime;
+# without it, ad hoc ("-") — enough for Apple silicon to run them, but a
+# downloaded copy then needs the quarantine flag removed (the cask does it).
+identity="${TINT_SIGN_IDENTITY:--}"
+sign() {
+  if [ "$identity" = "-" ]; then
+    codesign --force --sign - "$1"
+  else
+    codesign --force --options runtime --timestamp --sign "$identity" "$1"
+  fi
+}
+sign "$work/tint"
+sign "$app"
 codesign --verify --strict "$app"
+
+# Notarizing, when Apple ID credentials are given: Apple checks the files,
+# and the app gets a "ticket" stapled to it, so macOS opens it without asking.
+if [ "$identity" != "-" ] && [ -n "${TINT_NOTARY_APPLE_ID:-}" ]; then
+  notarize() {
+    xcrun notarytool submit "$1" --wait \
+      --apple-id "$TINT_NOTARY_APPLE_ID" --team-id "$TINT_NOTARY_TEAM_ID" --password "$TINT_NOTARY_PASSWORD"
+  }
+  echo "==> notarizing"
+  ditto -c -k --keepParent "$app" "$work/notarize-app.zip"
+  notarize "$work/notarize-app.zip"
+  xcrun stapler staple "$app"
+  ditto -c -k "$work/tint" "$work/notarize-cli.zip"
+  notarize "$work/notarize-cli.zip"
+fi
 
 tar -czf "dist/tint-$version-macos.tar.gz" -C "$work" tint
 ditto -c -k --keepParent "$app" "dist/Tint-$version-macos.zip"

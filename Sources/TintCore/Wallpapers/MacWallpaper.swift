@@ -34,7 +34,13 @@ public enum MacWallpaper {
     /// The current wallpaper's image file.
     public static func current() -> Lookup {
         var trace: [String] = []
-        let store = readStore()
+        // With several displays, the one chosen in the settings (default: the
+        // one with the menu bar) decides.
+        let display = Displays.resolve(TintSettings.load().display)
+        if let display, Displays.all().count > 1 {
+            trace.append("display \(display.index): \(display.name)")
+        }
+        let store = readStore(display: display?.uuid)
         trace.append("Index.plist → file: \(store.file ?? "none"), provider: \(store.provider ?? "none")")
 
         // Pictures and photos: the store first. It is read fresh from disk
@@ -45,7 +51,7 @@ public enum MacWallpaper {
             if let file = store.file, TintPaths.exists(file) {
                 return Lookup(path: file, notice: nil, trace: trace)
             }
-            if let reported = reportedImage() {
+            if let reported = reportedImage(display: display?.id) {
                 trace.append("macOS reports \(reported)")
                 return Lookup(path: reported, notice: nil, trace: trace)
             }
@@ -54,14 +60,14 @@ public enum MacWallpaper {
         // No image file at all: use the snapshot macOS rendered of it.
         if let provider = store.provider {
             for folder in MacWallpaperStore.snapshotFolderNames(provider: provider) {
-                if let snapshot = MacWallpaperStore.newestSnapshot(in: snapshotCache + "/" + folder) {
+                if let snapshot = MacWallpaperStore.newestSnapshot(in: snapshotCache + "/" + folder, size: display.map { ($0.pixelWidth, $0.pixelHeight) }) {
                     trace.append("using macOS's rendered snapshot: \(snapshot)")
                     return Lookup(path: snapshot, notice: nil, trace: trace)
                 }
             }
         }
 
-        if !isPicture, let reported = reportedImage() {
+        if !isPicture, let reported = reportedImage(display: display?.id) {
             trace.append("no snapshot; macOS reports \(reported)")
             return Lookup(path: reported, notice: nil, trace: trace)
         }
@@ -73,18 +79,21 @@ public enum MacWallpaper {
         return Lookup(path: nil, notice: notice, trace: trace)
     }
 
-    static func readStore() -> MacWallpaperStore.Choice {
+    static func readStore(display: String?) -> MacWallpaperStore.Choice {
         guard let data = FileManager.default.contents(atPath: storeDirectory + "/Store/Index.plist") else {
             return MacWallpaperStore.Choice(file: nil, provider: nil)
         }
-        return MacWallpaperStore.read(plist: data)
+        return MacWallpaperStore.read(plist: data, display: display)
     }
 
     /// The image file macOS reports for the main screen, if it is a real file.
-    static func reportedImage() -> String? {
+    static func reportedImage(display: UInt32?) -> String? {
         #if os(macOS)
         let url: URL? = onMain {
-            guard let screen = NSScreen.main ?? NSScreen.screens.first else { return nil }
+            let chosen = NSScreen.screens.first {
+                ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display
+            }
+            guard let screen = chosen ?? NSScreen.main ?? NSScreen.screens.first else { return nil }
             return NSWorkspace.shared.desktopImageURL(for: screen)
         }
         guard let url, url.isFileURL, !TintPaths.isDirectory(url.path), TintPaths.exists(url.path) else { return nil }
