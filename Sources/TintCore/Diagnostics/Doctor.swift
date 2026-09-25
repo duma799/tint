@@ -24,6 +24,9 @@ public enum Doctor {
         #endif
 
         checks.append(themeFiles())
+        if Pause.isPaused {
+            checks.append(Check(name: "paused", status: .warning, detail: "wallpaper changes are ignored — `tint resume`"))
+        }
         let settingsNote = TintPaths.exists(TintSettings.defaultPath) ? "" : " (defaults)"
         checks.append(Check(name: "settings", status: .info, detail: "\(TintSettings.load())\(settingsNote)"))
         checks.append(sketchyBar())

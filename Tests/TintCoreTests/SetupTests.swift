@@ -102,9 +102,66 @@ struct SetupTests {
         options.templatesDirectory = nil
         options.apolloShellThemes = nil
         options.editors = nil
+        options.history = nil
         let result = try ThemeApplier.apply(palette: SchemeTests.night, wallpaper: "/walls/koi.jpg", options: options, reloaders: [])
 
         #expect(result.scheme.mode == .light)
         #expect(ThemeApplier.lastApplied(cacheDirectory: dir.file("wal")) == "/walls/koi.jpg")
+    }
+}
+
+struct HistoryTests {
+    func entry(_ name: String, _ mode: ThemeMode = .dark, at seconds: Double) -> HistoryEntry {
+        HistoryEntry(wallpaper: "/walls/\(name).jpg", mode: mode, saturation: 1, date: Date(timeIntervalSince1970: seconds), colors: ["#000000"])
+    }
+
+    @Test func newestFirstAndReapplyingOnlyMovesItToTheTop() throws {
+        let dir = TempDir()
+        let path = dir.file("history.json")
+        try ThemeHistory.record(entry("a", at: 1), to: path)
+        try ThemeHistory.record(entry("b", at: 2), to: path)
+        try ThemeHistory.record(entry("a", at: 3), to: path)
+        try ThemeHistory.record(entry("a", .light, at: 4), to: path)
+
+        let names = ThemeHistory.load(from: path).map { ($0.wallpaper as NSString).lastPathComponent + "/" + $0.mode.rawValue }
+        #expect(names == ["a.jpg/light", "a.jpg/dark", "b.jpg/dark"])
+    }
+
+    @Test func keepsOnlyTheLatest() throws {
+        let dir = TempDir()
+        let path = dir.file("history.json")
+        for i in 0..<(ThemeHistory.limit + 5) { try ThemeHistory.record(entry("w\(i)", at: Double(i)), to: path) }
+        let loaded = ThemeHistory.load(from: path)
+        #expect(loaded.count == ThemeHistory.limit)
+        #expect(loaded.first?.wallpaper == "/walls/w\(ThemeHistory.limit + 4).jpg")
+    }
+
+    @Test func applyRecordsTheResolvedTheme() throws {
+        let dir = TempDir()
+        var options = ApplyOptions(mode: .auto, saturation: 1.2, reload: false)
+        options.cacheDirectory = dir.file("wal")
+        options.templatesDirectory = nil
+        options.apolloShellThemes = nil
+        options.editors = nil
+        options.history = dir.file("history.json")
+        let result = try ThemeApplier.apply(palette: SchemeTests.night, wallpaper: "/walls/koi.jpg", options: options, reloaders: [])
+
+        let recorded = ThemeHistory.load(from: dir.file("history.json"))
+        #expect(recorded.count == 1)
+        #expect(recorded[0].mode == result.scheme.mode)
+        #expect(recorded[0].saturation == 1.2)
+        #expect(recorded[0].colors == result.scheme.colors.map(\.hex))
+    }
+
+    @Test func displaysResolveByNumberNameOrMain() {
+        let displays = [
+            DisplayInfo(index: 1, id: 1, uuid: "A", name: "Built-in Retina Display", pixelWidth: 2940, pixelHeight: 1912, isMain: true),
+            DisplayInfo(index: 2, id: 2, uuid: "B", name: "LG UltraFine", pixelWidth: 3840, pixelHeight: 2160, isMain: false),
+        ]
+        #expect(Displays.resolve(nil, among: displays)?.uuid == "A")
+        #expect(Displays.resolve("main", among: displays)?.uuid == "A")
+        #expect(Displays.resolve("2", among: displays)?.uuid == "B")
+        #expect(Displays.resolve("lg", among: displays)?.uuid == "B")
+        #expect(Displays.resolve("9", among: displays)?.uuid == "A") // gone: back to main
     }
 }

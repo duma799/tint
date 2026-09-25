@@ -50,6 +50,12 @@ final class AppModel {
     /// Whether the app opens at login (as a menu bar item, without its window).
     var openAtLogin = SMAppService.mainApp.status == .enabled
 
+    /// The latest themes, newest first (`tint history`).
+    var history: [HistoryEntry] = ThemeHistory.load()
+
+    /// Whether the watcher is ignoring wallpaper changes (`tint pause`).
+    var paused = Pause.isPaused
+
     @ObservationIgnored private var appearanceObserver: (any NSObjectProtocol)?
 
     init() {
@@ -61,6 +67,56 @@ final class AppModel {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.systemIsDark = SystemAppearance.isDark() }
         }
+    }
+
+    func refreshHistory() {
+        history = ThemeHistory.load()
+        paused = Pause.isPaused
+    }
+
+    func setPaused(_ on: Bool) {
+        do {
+            try Pause.set(on)
+            status = on ? "Paused: wallpaper changes are left alone." : "Watching wallpaper changes again."
+        } catch {
+            status = "Couldn't change it: \(error.localizedDescription)"
+        }
+        paused = Pause.isPaused
+    }
+
+    /// Undo the latest theme.
+    func back() async {
+        guard !busy else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            if let (entry, _) = try await Task.detached(operation: { try ThemeApplier.back() }).value {
+                status = "Back to \((entry.wallpaper as NSString).lastPathComponent)"
+            } else {
+                status = "No earlier theme to go back to."
+            }
+        } catch {
+            status = "Couldn't go back: \(error)"
+        }
+        refreshHistory()
+    }
+
+    /// Re-apply a theme from "Recent".
+    func restore(_ entry: HistoryEntry) async {
+        guard !busy else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await Task.detached(operation: { try ThemeApplier.restore(entry, record: true) }).value
+            status = "Restored \((entry.wallpaper as NSString).lastPathComponent)"
+        } catch {
+            status = "Couldn't restore it: \(error)"
+        }
+        refreshHistory()
+    }
+
+    func openLog() {
+        NSWorkspace.shared.open(URL(fileURLWithPath: TintPaths.log))
     }
 
     func setOpenAtLogin(_ on: Bool) {
@@ -158,6 +214,7 @@ final class AppModel {
                 setAsWallpaper = false
             }
             status = describe(result, setWallpaper: setWallpaper)
+            refreshHistory()
         } catch {
             status = "Couldn't apply: \(error)"
         }

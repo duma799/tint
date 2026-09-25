@@ -123,3 +123,34 @@ struct WatcherTests {
         #expect(box.changes == ["/b.jpg"])
     }
 }
+
+struct MultiDisplayTests {
+    static func slot(_ file: String, set date: Date?) -> [String: Any] {
+        var slot = WallpaperStoreTests.slot(WallpaperStoreTests.choice("com.apple.wallpaper.choice.image", file: file))
+        if let date { slot["LastSet"] = date }
+        return slot
+    }
+
+    static var root: [String: Any] { [
+        "AllSpacesAndDisplays": ["Desktop": slot("file:///all.jpg", set: Date(timeIntervalSince1970: 1000))],
+        "Displays": [
+            "AAAA-1111": ["Desktop": slot("file:///left.jpg", set: Date(timeIntervalSince1970: 2000))],
+            "BBBB-2222": ["Desktop": slot("file:///right.jpg", set: Date(timeIntervalSince1970: 500))],
+        ],
+    ] }
+
+    static func read(display: String?) throws -> String? {
+        let data = try PropertyListSerialization.data(fromPropertyList: root, format: .binary, options: 0)
+        return MacWallpaperStore.read(plist: data, display: display).file
+    }
+
+    @Test func eachDisplayGetsItsNewestWallpaper() throws {
+        #expect(try Self.read(display: "AAAA-1111") == "/left.jpg")   // set later than "all displays"
+        #expect(try Self.read(display: "bbbb-2222") == "/all.jpg")    // its own is older: "all displays" is on screen
+        #expect(try Self.read(display: "CCCC-3333") == "/all.jpg")    // no setting of its own
+    }
+
+    @Test func withoutADisplayTheNewestSettingWins() throws {
+        #expect(try Self.read(display: nil) == "/left.jpg")
+    }
+}

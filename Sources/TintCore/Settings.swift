@@ -10,9 +10,14 @@ public struct TintSettings: Equatable, Sendable {
     /// Accent saturation, see `SchemeBuilder.build`.
     public var saturation: Double = 1
 
-    public init(mode: ModePreference = .dark, saturation: Double = 1) {
+    /// Which display's wallpaper to theme from: "main" (the one with the menu
+    /// bar), a number from `tint displays`, or part of its name.
+    public var display: String = "main"
+
+    public init(mode: ModePreference = .dark, saturation: Double = 1, display: String = "main") {
         self.mode = mode
         self.saturation = saturation
+        self.display = display
     }
 
     public static var defaultPath: String { TintPaths.config + "/settings.json" }
@@ -27,6 +32,9 @@ public struct TintSettings: Equatable, Sendable {
         if let mode = root["mode"] as? String {
             settings.mode = ModePreference(name: mode)
         }
+        if let display = root["display"] as? String, !display.isEmpty {
+            settings.display = display
+        }
         if let saturation = root["saturation"] as? Double {
             settings.saturation = min(max(saturation, SchemeBuilder.saturationRange.lowerBound), SchemeBuilder.saturationRange.upperBound)
         }
@@ -36,7 +44,7 @@ public struct TintSettings: Equatable, Sendable {
     public func save(to path: String = defaultPath) throws {
         try FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
         let rounded = (saturation * 100).rounded() / 100
-        let json = "{\n  \"mode\": \"\(mode.rawValue)\",\n  \"saturation\": \(rounded)\n}\n"
+        let json = "{\n  \"mode\": \"\(mode.rawValue)\",\n  \"saturation\": \(rounded),\n  \"display\": \(Escaping.json(display))\n}\n"
         try PywalWriter.atomicWrite(json, to: path)
     }
 }

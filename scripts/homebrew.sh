@@ -61,8 +61,9 @@ cask "tint-app" do
 
   app "Tint.app"
 
-  # The app is signed ad hoc, not with a paid Developer ID, so macOS would
-  # refuse to open a downloaded copy. Homebrew verified the checksum above.
+  # Unless the release was signed with a Developer ID and notarized, the app
+  # is signed ad hoc and macOS would refuse to open a downloaded copy.
+  # Homebrew verified the checksum above; for a notarized app this is a no-op.
   postflight do
     system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Tint.app"]
   end

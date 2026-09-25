@@ -24,6 +24,11 @@ jobs:
     runs-on: macos-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+    env:
+      # Releases (pushes to main) are signed with a Developer ID and notarized
+      # when these secrets exist; everything else is signed ad hoc. See the
+      # README's "Signing releases".
+      SIGNED_RELEASE: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.MACOS_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -33,7 +38,29 @@ jobs:
         id: version
         run: echo "version=$(sed -n 's/.*tintVersion = "\(.*\)".*/\1/p' Sources/TintCore/Version.swift)" >> "$GITHUB_OUTPUT"
 
+      - name: Import the signing certificate
+        if: env.SIGNED_RELEASE == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/certificate.p12"
+
       - name: Package (universal)
+        env:
+          TINT_SIGN_IDENTITY: ${{ env.SIGNED_RELEASE == 'true' && secrets.MACOS_SIGN_IDENTITY || '' }}
+          TINT_NOTARY_APPLE_ID: ${{ env.SIGNED_RELEASE == 'true' && secrets.APPLE_ID || '' }}
+          TINT_NOTARY_TEAM_ID: ${{ env.SIGNED_RELEASE == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          TINT_NOTARY_PASSWORD: ${{ env.SIGNED_RELEASE == 'true' && secrets.APPLE_APP_PASSWORD || '' }}
         run: scripts/package.sh
 
       - name: Smoke test

@@ -8,7 +8,7 @@ struct Tint: ParsableCommand {
         commandName: "tint",
         abstract: "Colour themes from your wallpaper, for macOS.",
         version: tintVersion,
-        subcommands: [Apply.self, Watch.self, Service.self, Doctor.self, App.self, PaletteCommand.self, Wallpaper.self])
+        subcommands: [Apply.self, Back.self, History.self, Watch.self, PauseCommand.self, Resume.self, Service.self, Doctor.self, App.self, PaletteCommand.self, Wallpaper.self, Displays.self])
 }
 
 /// --mode and --saturation, shared by apply and watch.
