@@ -1,2 +1,2 @@
 /// tint's version. scripts/package.sh reads it from here.
-public let tintVersion = "0.6.0"
+public let tintVersion = "0.6.1"
