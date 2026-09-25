@@ -2,9 +2,9 @@
 class Tint < Formula
   desc "Colour themes from your wallpaper, for macOS"
   homepage "https://github.com/duma799/tint"
-  url "https://github.com/duma799/tint/releases/download/v0.6.1/tint-0.6.1-macos.tar.gz"
-  version "0.6.1"
-  sha256 "7ecb9ddb61fa8112f21c7129f5dbc403b629f60c875bb45c794eec66df2e9795"
+  url "https://github.com/duma799/tint/releases/download/v0.7.0/tint-0.7.0-macos.tar.gz"
+  version "0.7.0"
+  sha256 "25367dadeed5a6439f6a8c4d027eee6b21cda7a6f67c8196376b65b0a220349d"
   license "GPL-3.0-or-later"
 
   depends_on :macos
@@ -21,6 +21,8 @@ class Tint < Formula
         tint doctor
       The app (menu bar + window):
         brew install --cask duma799/tint/tint-app
+      Update with the full name (Homebrew has an unrelated "tint"):
+        brew upgrade duma799/tint/tint && tint service restart
     EOS
   end
 
