@@ -32,6 +32,14 @@ tint service install                       # theme on every wallpaper change, fr
 tint doctor                                # check everything is wired up
 ```
 
+To update — with the full names, since Homebrew's own `tint` is a different program:
+
+```sh
+brew update
+brew upgrade duma799/tint/tint && brew upgrade --cask duma799/tint/tint-app
+tint service restart
+```
+
 One universal build: Apple silicon and Intel, macOS 15 or later.
 
 From source (needs Xcode or its command-line tools):
