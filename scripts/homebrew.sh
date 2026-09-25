@@ -35,6 +35,8 @@ class Tint < Formula
         tint doctor
       The app (menu bar + window):
         brew install --cask duma799/tint/tint-app
+      Update with the full name (Homebrew has an unrelated "tint"):
+        brew upgrade duma799/tint/tint && tint service restart
     EOS
   end
 
