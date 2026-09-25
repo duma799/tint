@@ -47,7 +47,7 @@ public enum EditorThemes {
 
         var description: String {
             switch self {
-            case .notJSON(let path): "\(path) isn't plain JSON (comments?), so tint left it alone"
+            case .notJSON(let path): "\(path) isn't readable JSON, so tint left it alone"
             }
         }
     }
@@ -189,21 +189,21 @@ public enum EditorThemes {
     /// Every other setting is kept.
     static func vscode(_ scheme: Scheme, folder: String, extensions: String) throws -> [String] {
         let path = folder + "/settings.json"
-        guard let data = FileManager.default.contents(atPath: path) else { return [] }
-        guard var settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw Failure.notJSON(path)
-        }
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return [] }
+        guard JSONCEditor.parse(text) is [String: Any] else { throw Failure.notJSON(path) }
 
+        // Edited in place, key by key: the user's comments and layout stay.
+        var editor = JSONCEditor(text)
         var written: [String] = []
         if TintPaths.isDirectory(extensions) {
             written += try vscodeExtension(scheme, extensions: extensions)
-            settings["workbench.colorTheme"] = themeName
+            try editor.set("workbench.colorTheme", themeName)
         }
 
         let (workbench, tokens) = vscodeColors(scheme)
-        settings["workbench.colorCustomizations"] = workbench
-        settings["editor.tokenColorCustomizations"] = tokens
-        try writeJSON(settings, to: path)
+        try editor.set("workbench.colorCustomizations", workbench)
+        try editor.set("editor.tokenColorCustomizations", tokens)
+        try PywalWriter.atomicWrite(editor.text, to: path)
         return written + [path]
     }
 
@@ -405,20 +405,17 @@ public enum EditorThemes {
     static func gemini(_ s: Scheme, folder: String) throws -> [String] {
         guard TintPaths.isDirectory(folder) else { return [] }
         let path = folder + "/settings.json"
-        var settings: [String: Any] = [:]
-        if let data = FileManager.default.contents(atPath: path) {
-            guard let loaded = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                throw Failure.notJSON(path)
-            }
-            settings = loaded
-        }
+        let text = (try? String(contentsOfFile: path, encoding: .utf8)) ?? "{}\n"
+        guard let settings = JSONCEditor.parse(text) as? [String: Any] else { throw Failure.notJSON(path) }
         var ui = settings["ui"] as? [String: Any] ?? [:]
         var custom = ui["customThemes"] as? [String: Any] ?? [:]
         custom[themeName] = geminiTheme(s)
         ui["customThemes"] = custom
         ui["theme"] = themeName
-        settings["ui"] = ui
-        try writeJSON(settings, to: path)
+
+        var editor = JSONCEditor(text)
+        try editor.set("ui", ui)
+        try PywalWriter.atomicWrite(editor.text, to: path)
         return [path]
     }
 

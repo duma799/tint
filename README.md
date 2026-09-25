@@ -81,7 +81,7 @@ tint wallpaper -v               # print the current wallpaper, and how it was fo
 | **Ghostty** 1.2+ | sends it `SIGUSR2` (reload config). Add to its config: `config-file = ~/.cache/wal/colors-ghostty` |
 | **ApolloShell** | writes `~/Library/Application Support/ApolloShell/themes/tint.css`. Choose **tint** in Nexus → Themes once; ApolloShell re-reads the file on every change |
 | **Zed** | writes `~/.config/zed/themes/tint.json` and points your settings' `theme.dark` (or `light`) at **Tint** |
-| **VS Code**, **Antigravity** | installs a **Tint** colour theme (a tiny local extension in `~/.vscode/extensions`) and selects it, and puts the same colours in `workbench.colorCustomizations` so they change instantly, no reload. Every other setting is kept; a `settings.json` with comments is left alone, with a note |
+| **VS Code**, **Antigravity** | installs a **Tint** colour theme (a tiny local extension in `~/.vscode/extensions`) and selects it, and puts the same colours in `workbench.colorCustomizations` so they change instantly, no reload. Only tint's keys change: every other setting, and your comments and layout, stay as they are |
 | **Gemini CLI** | adds and selects a **Tint** custom theme in `~/.gemini/settings.json` |
 | **WezTerm** | nothing to send — it reloads when a watched file changes. In `wezterm.lua`: |
 
