@@ -50,9 +50,41 @@ struct EditorTests {
         #expect(settings["editor.tokenColorCustomizations"] != nil)
     }
 
-    @Test func settingsWithCommentsAreLeftAloneWithAWarning() {
+    @Test func settingsWithCommentsAreEditedAndKeepTheirComments() throws {
         let home = TempDir()
-        let original = "{\n  // my settings\n  \"editor.fontSize\": 14\n}\n"
+        home.write("Library/Application Support/Code/User/settings.json", """
+        {
+            // Шрифт + лигатуры
+            "editor.fontSize": 14,
+            /* keep me */
+            "workbench.colorTheme": "Tokyo Night",
+            "files.autoSave": "afterDelay", // trailing comment
+        }
+        """)
+        home.write(".vscode/extensions/extensions.json", "[]")
+        let result = EditorThemes.write(s, paths: .init(home: home.path))
+        #expect(result.warnings.isEmpty, "\(result.warnings)")
+
+        let text = home.read("Library/Application Support/Code/User/settings.json")
+        #expect(text.contains("// Шрифт + лигатуры"))
+        #expect(text.contains("/* keep me */"))
+        #expect(text.contains("// trailing comment"))
+        #expect(text.contains("\"workbench.colorTheme\": \"Tint\""))
+        #expect(!text.contains("Tokyo Night"))
+        let parsed = JSONCEditor.parse(text) as! [String: Any]
+        #expect(parsed["editor.fontSize"] as? Int == 14)
+        #expect((parsed["workbench.colorCustomizations"] as? [String: String])?["terminal.ansiBlue"] == s[4].hex)
+
+        // Applying again replaces tint's keys instead of adding them twice.
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+        let again = home.read("Library/Application Support/Code/User/settings.json")
+        #expect(again.components(separatedBy: "workbench.colorCustomizations").count == 2)
+        #expect(again.contains("// Шрифт + лигатуры"))
+    }
+
+    @Test func brokenSettingsAreLeftAloneWithAWarning() {
+        let home = TempDir()
+        let original = "{ \"editor.fontSize\": 14,,, oops"
         home.write("Library/Application Support/Antigravity/User/settings.json", original)
         let result = EditorThemes.write(s, paths: .init(home: home.path))
 
@@ -121,5 +153,40 @@ struct VSCodeThemeTests {
         home.write("Library/Application Support/Code/User/settings.json", "{}")
         let result = EditorThemes.write(s, paths: .init(home: home.path))
         #expect(result.written == [home.file("Library/Application Support/Code/User/settings.json")])
+    }
+}
+
+struct JSONCEditorTests {
+    @Test func addsAKeyToAnEmptyObject() throws {
+        var e = JSONCEditor("{}\n")
+        try e.set("a", 1)
+        #expect((JSONCEditor.parse(e.text) as? [String: Any])?["a"] as? Int == 1)
+    }
+
+    @Test func addsAfterTheLastEntryWithACommaAndKeepsComments() throws {
+        var e = JSONCEditor("{\n    // hi\n    \"x\": true // after\n}\n")
+        try e.set("y", ["k": "v"])
+        #expect(e.text.contains("// hi"))
+        #expect(e.text.contains("// after"))
+        let parsed = JSONCEditor.parse(e.text) as! [String: Any]
+        #expect(parsed["x"] as? Bool == true)
+        #expect((parsed["y"] as? [String: String])?["k"] == "v")
+    }
+
+    @Test func replacesOnlyTheTopLevelKey() throws {
+        var e = JSONCEditor("{\"a\": {\"theme\": 1}, \"theme\": \"old\", \"s\": \"a // not a comment\"}")
+        try e.set("theme", "new")
+        let parsed = JSONCEditor.parse(e.text) as! [String: Any]
+        #expect(parsed["theme"] as? String == "new")
+        #expect((parsed["a"] as? [String: Int])?["theme"] == 1)
+        #expect(parsed["s"] as? String == "a // not a comment")
+    }
+
+    @Test func replacesAnObjectValueWithNestedBracesAndComments() throws {
+        var e = JSONCEditor("{\n  \"c\": {\n    \"x\": { \"y\": [1, 2] }, // }\n  },\n  \"z\": 3\n}")
+        try e.set("c", ["new": true])
+        let parsed = JSONCEditor.parse(e.text) as! [String: Any]
+        #expect((parsed["c"] as? [String: Bool])?["new"] == true)
+        #expect(parsed["z"] as? Int == 3)
     }
 }
