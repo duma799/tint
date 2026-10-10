@@ -45,9 +45,11 @@ struct EditorTests {
 
         let settings = try json(home.file("Library/Application Support/Code/User/settings.json"))
         #expect(settings["editor.fontSize"] as? Int == 14)
-        let workbench = settings["workbench.colorCustomizations"] as! [String: String]
+        let workbenchCustomizations = settings["workbench.colorCustomizations"] as! [String: Any]
+        let workbench = workbenchCustomizations["[Tint]"] as! [String: String]
         #expect(workbench["terminal.ansiBlue"] == s[4].hex)
-        #expect(settings["editor.tokenColorCustomizations"] != nil)
+        let tokenCustomizations = settings["editor.tokenColorCustomizations"] as! [String: Any]
+        #expect(tokenCustomizations["[Tint]"] != nil)
     }
 
     @Test func settingsWithCommentsAreLeftAloneWithAWarning() {
@@ -114,6 +116,44 @@ struct VSCodeThemeTests {
         let registry = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file(".vscode/extensions/extensions.json"))!) as! [[String: Any]]
         let ids = registry.compactMap { ($0["identifier"] as? [String: Any])?["id"] as? String }
         #expect(ids == ["ms-python.python", "duma799.tint-theme"])
+    }
+
+    @Test func unscopedColoursFromOlderVersionsAreRemoved() throws {
+        let home = TempDir()
+        // What tint 0.6.0 left behind, next to the user's own scoped customisations.
+        home.write("Library/Application Support/Code/User/settings.json", """
+        {
+          "workbench.colorCustomizations": {
+            "editor.background": "#000000",
+            "terminal.ansiBlue": "#0000ff",
+            "[One Dark Pro]": { "editor.background": "#282c34" }
+          },
+          "editor.tokenColorCustomizations": {
+            "comments": { "foreground": "#888888" },
+            "textMateRules": [],
+            "[One Dark Pro]": { "comments": "#5c6370" }
+          }
+        }
+        """)
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+
+        let settings = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file("Library/Application Support/Code/User/settings.json"))!) as! [String: Any]
+        let workbench = settings["workbench.colorCustomizations"] as! [String: Any]
+        #expect(Set(workbench.keys) == ["[Tint]", "[One Dark Pro]"])
+        let tokens = settings["editor.tokenColorCustomizations"] as! [String: Any]
+        #expect(Set(tokens.keys) == ["[Tint]", "[One Dark Pro]"])
+    }
+
+    @Test func theEditorTakesTheSchemesBackgroundAndItsPanelsKeepItsColour() {
+        let (workbench, _) = EditorThemes.vscodeColors(s)
+        #expect(workbench["editor.background"] == s.background.hex)
+        #expect(workbench["terminal.background"] == s.background.hex)
+        let background = s.background.lab
+        for key in ["sideBar.background", "tab.inactiveBackground", "panel.background", "editor.lineHighlightBackground"] {
+            let panel = Rgb(hex: workbench[key]!)!.lab
+            #expect(panel.l > background.l, "\(key) is lighter on a dark theme")
+            #expect(abs(panel.hue - background.hue) < 15, "\(key) keeps the background's hue")
+        }
     }
 
     @Test func withoutAnExtensionsFolderOnlyTheSettingsChange() throws {

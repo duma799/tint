@@ -22,9 +22,9 @@ public enum SchemeBuilder {
         }
     }
 
-    /// - Parameter saturation: scales how colourful the accents are: 1 keeps
-    ///   the image's own colours, 0.5 is muted, 1.5 vivid. Contrast is still
-    ///   checked afterwards.
+    /// - Parameter saturation: scales how colourful the accents and the
+    ///   background are: 1 keeps the image's own colours, 0.5 is muted, 1.5
+    ///   vivid. Contrast is still checked afterwards.
     public static func build(_ palette: Palette, mode: ThemeMode, saturation: Double = 1) throws -> Scheme {
         guard !palette.swatches.isEmpty else { throw BuildError.emptyPalette }
         guard saturationRange.contains(saturation) else { throw BuildError.saturation(saturation) }
@@ -34,17 +34,20 @@ public enum SchemeBuilder {
         let darkest = labs.min { $0.l < $1.l }!
         let lightest = labs.max { $0.l < $1.l }!
 
-        // Background and foreground are tinted with the image's overall
+        // Background and foreground are coloured with the image's overall
         // colour — dominated by what covers most of the image —
         // not with whichever colour happens to be darkest or lightest: a
-        // mostly blue photo with a patch of dark trees gets a blue-black
+        // mostly blue photo with a patch of dark trees gets a deep blue
         // background, not a green one, and a mostly grey image stays neutral.
-        // Only a hint of it, though: strongly coloured backgrounds make every
-        // other colour muddy.
+        // Never pitch black (or paper white): at the very ends of the
+        // lightness scale no colour shows, and every app would look the same.
         let tint = overallTint(palette)
-        let backgroundL = dark ? min(darkest.l, 12) : max(lightest.l, 94)
-        let backgroundChroma = min(tint.chroma * 0.6, dark ? 14 : 8, max(backgroundL, 8))
-        let backgroundLab = Lab.lch(l: backgroundL, chroma: backgroundChroma, hue: tint.hue)
+        let backgroundL = dark ? min(max(darkest.l, 2), 3) : min(max(lightest.l, 92), 96)
+        let backgroundLab = Lab.lch(
+            l: backgroundL,
+            chroma: backgroundChroma(tint.chroma, dark: dark) * saturation,
+            hue: tint.hue
+        ).inGamut()
         let background = backgroundLab.rgb
 
         let foregroundLab = Lab.lch(
@@ -122,6 +125,15 @@ public enum SchemeBuilder {
         return (0..<6).map { slot in
             accents[slot] ?? Lab.lch(l: lightness, chroma: chroma, hue: slotHues[slot])
         }
+    }
+
+    /// How colourful the background is, from how colourful the image is
+    /// overall: the wallpaper's colour, but a (nearly) grey image keeps a
+    /// grey background. Dark backgrounds get only a little — close to black,
+    /// with the wallpaper's colour just showing; light ones a little more.
+    static func backgroundChroma(_ imageChroma: Double, dark: Bool) -> Double {
+        guard imageChroma >= 4 else { return imageChroma }
+        return dark ? min(max(imageChroma * 0.5, 4), 8) : min(max(imageChroma, 8), 16)
     }
 
     /// The image's overall colour (a and b; lightness ignored): the average

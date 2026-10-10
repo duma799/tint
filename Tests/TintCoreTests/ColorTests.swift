@@ -33,4 +33,13 @@ struct ColorTests {
         #expect(abs(lab.chroma - 40) < 0.001)
         #expect(lab.withMaxChroma(10).chroma <= 10.0001)
     }
+
+    @Test func outOfGamutColoursLoseChromaNotHue() {
+        let olive = Lab.lch(l: 13, chroma: 80, hue: 100) // far more colour than sRGB has that dark
+        #expect(!olive.isInGamut)
+        let fitted = olive.inGamut()
+        #expect(fitted.isInGamut)
+        #expect(fitted.chroma > 5 && fitted.chroma < 80)
+        #expect(abs(fitted.hue - 100) < 0.5 && fitted.l == 13)
+    }
 }

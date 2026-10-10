@@ -71,9 +71,6 @@ struct Apply: ParsableCommand {
             say("  " + s.colors[0..<8].map { Terminal.block($0, 4) }.joined())
             say("  " + s.colors[8..<16].map { Terminal.block($0, 4) }.joined())
             say("  wrote \(result.written.count) files to \(options.cacheDirectory)")
-            if let apollo = result.written.first(where: { $0.hasSuffix("/" + ApolloShellTheme.fileName) }) {
-                say("  ✓ ApolloShell theme       \(apollo)")
-            }
             for r in result.reloads {
                 let mark = r.skipped ? "·" : r.ok ? "✓" : "✗"
                 say("  \(mark) \(r.name.padding(toLength: 20, withPad: " ", startingAt: 0)) \(r.detail)")

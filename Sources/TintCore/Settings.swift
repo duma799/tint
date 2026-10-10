@@ -7,7 +7,7 @@ public struct TintSettings: Equatable, Sendable {
     /// Dark, light, from the image (auto) or from macOS (system).
     public var mode: ModePreference = .dark
 
-    /// Accent saturation, see `SchemeBuilder.build`.
+    /// How colourful the scheme is, see `SchemeBuilder.build`.
     public var saturation: Double = 1
 
     public init(mode: ModePreference = .dark, saturation: Double = 1) {

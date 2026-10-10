@@ -21,9 +21,6 @@ public enum TintPaths {
     /// Where the login service writes its output, `~/Library/Logs/tint.log`.
     public static var log: String { home + "/Library/Logs/tint.log" }
 
-    /// ApolloShell's theme folder; tint writes `tint.css` there when it exists.
-    public static var apolloShellThemes: String { home + "/Library/Application Support/ApolloShell/themes" }
-
     /// Full path of `command` on the PATH, or nil.
     public static func findOnPath(_ command: String, path: String? = nil) -> String? {
         let dirs = (path ?? ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":")

@@ -87,4 +87,20 @@ struct SchemeTests {
         let s = try SchemeBuilder.build(palette("#10142e", "#1b2233", "#f4e9dc", "#2c255c"), mode: .light)
         #expect(s[4].lab.l >= 30)
     }
+
+    @Test(arguments: ThemeMode.allCases)
+    func theBackgroundIsTheImagesColourNotBlackOrWhite(mode: ThemeMode) throws {
+        // A dark blue night photo whose darkest patch is nearly black.
+        let night = palette("#05070c", "#1b2a55", "#2a3f7a", "#4a5f9a", "#c9b46a")
+        let background = try SchemeBuilder.build(night, mode: mode).background.lab
+        #expect(background.chroma >= 3, "chroma \(background.chroma)")
+        #expect(background.hue > 250 && background.hue < 320, "hue \(background.hue)")
+        if mode == .dark { #expect(background.l >= 1.5 && background.l <= 4) } else { #expect(background.l <= 97) }
+    }
+
+    @Test func saturationAlsoScalesTheBackground() throws {
+        let muted = try SchemeBuilder.build(Self.night, mode: .dark, saturation: 0.5).background.lab.chroma
+        let vivid = try SchemeBuilder.build(Self.night, mode: .dark, saturation: 1.5).background.lab.chroma
+        #expect(muted < vivid)
+    }
 }

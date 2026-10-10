@@ -85,7 +85,7 @@ public enum EditorThemes {
     static func zedTheme(_ s: Scheme) -> [String: Any] {
         let c = palette(s)
         let style: [String: Any] = [
-            "border": c.surface, "border.variant": c.elevated, "border.focused": c.accent, "border.selected": c.accent,
+            "border": c.border, "border.variant": c.elevated, "border.focused": c.accent, "border.selected": c.accent,
             "border.transparent": "#00000000", "border.disabled": c.surface,
             "elevated_surface.background": c.elevated, "surface.background": c.surface, "background": c.bg,
             "element.background": c.surface, "element.hover": c.selection, "element.active": c.selection,
@@ -200,9 +200,21 @@ public enum EditorThemes {
             settings["workbench.colorTheme"] = themeName
         }
 
+        // Scoped to "[Tint]" so these colours only apply while Tint itself is
+        // the active theme; unscoped, VS Code applies them on top of every
+        // theme, so switching themes wouldn't change the background.
+        // tint 0.6.0 wrote them unscoped: drop those leftovers, keep the rest.
         let (workbench, tokens) = vscodeColors(scheme)
-        settings["workbench.colorCustomizations"] = workbench
-        settings["editor.tokenColorCustomizations"] = tokens
+        var workbenchCustomizations = (settings["workbench.colorCustomizations"] as? [String: Any] ?? [:])
+            .filter { workbench[$0.key] == nil }
+        workbenchCustomizations["[\(themeName)]"] = workbench
+        settings["workbench.colorCustomizations"] = workbenchCustomizations
+
+        var tokenCustomizations = (settings["editor.tokenColorCustomizations"] as? [String: Any] ?? [:])
+            .filter { tokens[$0.key] == nil }
+        tokenCustomizations["[\(themeName)]"] = tokens
+        settings["editor.tokenColorCustomizations"] = tokenCustomizations
+
         try writeJSON(settings, to: path)
         return written + [path]
     }
@@ -281,14 +293,10 @@ public enum EditorThemes {
 
     static func vscodeColors(_ s: Scheme) -> (workbench: [String: String], tokens: [String: Any]) {
         let c = palette(s)
-        let dark = s.mode == .dark
-        // Dark: a deeper background than the terminal's, for long editing sessions.
-        let bg = dark ? RGBMath.darken(s.background, 0.88).hex : s.background.hex
-        let elevated = dark ? RGBMath.darken(s.background, 0.83).hex : RGBMath.darken(s.background, 0.03).hex
-        let surface = dark ? RGBMath.darken(s.background, 0.85).hex : RGBMath.darken(s.background, 0.02).hex
-        let active = dark ? RGBMath.darken(s.background, 0.75).hex : RGBMath.darken(s.background, 0.05).hex
-        let border = dark ? RGBMath.darken(s[1], 0.75).hex : RGBMath.lighten(s[1], 0.75).hex
-        let selection = dark ? RGBMath.darken(s[1], 0.7).hex : RGBMath.lighten(s[1], 0.7).hex
+        // The scheme's own background, the terminal's too: the editor takes
+        // the wallpaper's colour, and its panels are shades of it.
+        let bg = c.bg, elevated = c.elevated, surface = c.surface, active = c.active
+        let border = c.border, selection = c.selection
 
         let workbench: [String: String] = [
             "editor.background": bg, "editor.foreground": c.label, "editorCursor.foreground": c.accent,
@@ -445,7 +453,7 @@ public enum EditorThemes {
     /// The roles every editor theme uses, derived from the scheme the same way
     /// for all of them (and as the old reload-theme script did).
     struct Roles {
-        var bg, surface, elevated, active, selection: String
+        var bg, surface, elevated, active, border, selection: String
         var accent, icon, label, muted: String
         var keyword, keywordLight, keywordDim: String
         var string, stringLight, stringDim: String
@@ -457,13 +465,24 @@ public enum EditorThemes {
 
     static func palette(_ s: Scheme) -> Roles {
         let dark = s.mode == .dark
-        // Layers step away from the background: lighter on dark themes, darker on light.
-        func layer(_ amount: Double) -> String {
-            (dark ? RGBMath.lighten(s.background, amount) : RGBMath.darken(s.background, amount * 0.5)).hex
+        let background = s.background.lab
+        // Panels, tabs and highlights step away from the background in
+        // lightness only — lighter on dark themes, darker on light ones — so
+        // they keep its colour instead of fading to grey.
+        func layer(_ step: Double) -> String {
+            background.withLightness(min(max(background.l + (dark ? step : -step * 0.6), 0), 100)).inGamut().rgb.hex
         }
+        // The selection: the background, a third of the way to the blue accent.
+        let blue = s[4].lab
+        let selection = Lab(
+            l: background.l + (blue.l - background.l) * 0.3,
+            a: background.a + (blue.a - background.a) * 0.3,
+            b: background.b + (blue.b - background.b) * 0.3
+        ).inGamut().rgb.hex
         let label = s[6], c8 = s[8]
         return Roles(
-            bg: s.background.hex, surface: layer(0.04), elevated: layer(0.08), active: layer(0.12), selection: layer(0.25),
+            bg: s.background.hex, surface: layer(3), elevated: layer(6), active: layer(9), border: layer(12),
+            selection: selection,
             accent: s[1].hex, icon: s[4].hex, label: label.hex, muted: c8.hex,
             keyword: s[1].hex, keywordLight: RGBMath.lighten(s[1], 0.15).hex, keywordDim: RGBMath.darken(s[1], 0.2).hex,
             string: s[2].hex, stringLight: RGBMath.lighten(s[2], 0.2).hex, stringDim: RGBMath.darken(s[2], 0.15).hex,

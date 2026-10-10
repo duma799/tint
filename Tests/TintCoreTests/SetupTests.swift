@@ -100,11 +100,37 @@ struct SetupTests {
         var options = ApplyOptions(mode: .light, saturation: 1.2, reload: true)
         options.cacheDirectory = dir.file("wal")
         options.templatesDirectory = nil
-        options.apolloShellThemes = nil
         options.editors = nil
         let result = try ThemeApplier.apply(palette: SchemeTests.night, wallpaper: "/walls/koi.jpg", options: options, reloaders: [])
 
         #expect(result.scheme.mode == .light)
         #expect(ThemeApplier.lastApplied(cacheDirectory: dir.file("wal")) == "/walls/koi.jpg")
+    }
+
+    @Test func aThemeIsCurrentUntilItsImageChanges() throws {
+        let dir = TempDir()
+        let image = dir.write("koi.jpg", "pixels")
+        var options = ApplyOptions()
+        options.cacheDirectory = dir.file("wal")
+        options.templatesDirectory = nil
+        options.editors = nil
+        _ = try ThemeApplier.apply(palette: SchemeTests.night, wallpaper: image, options: options, reloaders: [])
+        #expect(ThemeApplier.isCurrent(image, cacheDirectory: dir.file("wal")))
+        #expect(!ThemeApplier.isCurrent(dir.file("other.jpg"), cacheDirectory: dir.file("wal")))
+
+        // Rewritten in place, after the theme was made.
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(5)], ofItemAtPath: image)
+        #expect(!ThemeApplier.isCurrent(image, cacheDirectory: dir.file("wal")))
+    }
+
+    @Test func onlyOneApplyHoldsTheLock() throws {
+        let dir = TempDir()
+        let lock = dir.file("lock")
+        let inner: Result<Void, any Error> = try FileLock.withLock(lock) {
+            Result { try FileLock.withLock(lock, timeout: 0.2) {} }
+        }
+        #expect(throws: FileLock.Failure.self) { try inner.get() }
+        // Released afterwards.
+        #expect(try FileLock.withLock(lock, timeout: 0.2) { true })
     }
 }

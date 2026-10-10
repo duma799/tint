@@ -116,11 +116,15 @@ public struct GhosttyReloader: Reloader {
     }
 
     public func reload(_ context: ReloadContext) -> ReloadResult {
-        guard ProcessRunner.isRunning("ghostty") else { return .skip(name, "not running") }
+        let pids = ProcessRunner.pids("ghostty")
+        guard !pids.isEmpty else { return .skip(name, "not running") }
         guard usesTintTheme() else {
             return .skip(name, "add `config-file = ~/.cache/wal/\(GhosttyReloader.themeFile)` to your Ghostty config to theme it")
         }
-        return Reloaders.command(name, "pkill", ["-USR2", "-x", "ghostty"])
+        // Signalled directly, not with pkill: pkill can't include its own
+        // ancestors, and the Ghostty that tint was typed into is one.
+        let failed = pids.filter { kill($0, SIGUSR2) != 0 }
+        return failed.isEmpty ? .done(name, "reloaded") : .fail(name, "couldn't signal ghostty (pid \(failed.map(String.init).joined(separator: ", ")))")
     }
 }
 

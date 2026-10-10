@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:tint}",
+            "name": "Debug tint",
+            "target": "tint",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug tint"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:tint}",
+            "name": "Release tint",
+            "target": "tint",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release tint"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:tint}",
+            "name": "Debug TintApp",
+            "target": "TintApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug TintApp"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:tint}",
+            "name": "Release TintApp",
+            "target": "TintApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release TintApp"
+        }
+    ]
+}

@@ -40,7 +40,7 @@ public final class WallpaperWatcher: @unchecked Sendable {
     deinit { stop() }
 
     public func start() {
-        queue.sync { last = locate() }
+        queue.sync { last = locate().map(WallpaperWatcher.identity) }
         let existing = directories.filter(TintPaths.isDirectory)
         for missing in directories where !existing.contains(missing) {
             onTrace?("\(missing) not found — not watching it")
@@ -87,9 +87,21 @@ public final class WallpaperWatcher: @unchecked Sendable {
 
     /// Re-reads the wallpaper and reports it if it moved on. Runs on `queue`.
     func check() {
-        guard let current = locate(), current != last else { return }
-        last = current
+        guard let current = locate() else { return }
+        let identity = WallpaperWatcher.identity(current)
+        guard identity != last else { return }
+        last = identity
         onChange?(current)
+    }
+
+    /// A wallpaper file as it is now: its path, size and modification date.
+    /// A new image written over the old one under the same name (a script
+    /// cycling wallpapers) is a change too.
+    static func identity(_ path: String) -> String {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path) else { return path }
+        let size = (attributes[.size] as? NSNumber)?.intValue ?? 0
+        let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        return "\(path) \(size) \(modified)"
     }
 
     /// For tests: runs `check` on the watcher's queue and waits.

@@ -4,7 +4,7 @@ public struct ApplyOptions: Sendable {
     /// Dark, light, from the image (auto) or from macOS (system).
     public var mode: ModePreference = .dark
 
-    /// Accent saturation, 0.5–1.5; see `SchemeBuilder.build`.
+    /// How colourful the scheme is (accents and background), 0.5–1.5; see `SchemeBuilder.build`.
     public var saturation: Double = 1
 
     /// Tell apps to reload. Off: only write the files.
@@ -12,9 +12,6 @@ public struct ApplyOptions: Sendable {
 
     public var cacheDirectory = TintPaths.walCache
     public var templatesDirectory: String? = TintPaths.walTemplates
-
-    /// ApolloShell's themes folder; nil to not write a shell theme.
-    public var apolloShellThemes: String? = TintPaths.apolloShellThemes
 
     /// Where to look for editors to theme (Zed, VS Code, Antigravity, Gemini CLI); nil for none.
     public var editors: EditorThemes.Paths? = EditorThemes.Paths()
@@ -52,23 +49,25 @@ public enum ThemeApplier {
     }
 
     /// Everything after palette extraction — for callers that already have the palette (the app).
+    /// One apply at a time, across processes: writing the files and reloading
+    /// the apps happen together, under a lock in the cache folder.
     public static func apply(palette: Palette, wallpaper: String, options: ApplyOptions, reloaders: [any Reloader]? = nil) throws -> ApplyResult {
+        try FileManager.default.createDirectory(atPath: options.cacheDirectory, withIntermediateDirectories: true)
+        return try FileLock.withLock(options.cacheDirectory + "/" + lockFile) {
+            try applyLocked(palette: palette, wallpaper: wallpaper, options: options, reloaders: reloaders)
+        }
+    }
+
+    /// The lock file, in the cache folder; hidden, so it is never mistaken for a theme.
+    static let lockFile = ".tint.lock"
+
+    private static func applyLocked(palette: Palette, wallpaper: String, options: ApplyOptions, reloaders: [any Reloader]?) throws -> ApplyResult {
         let mode = options.mode.resolve(for: palette)
         let scheme = try SchemeBuilder.build(palette, mode: mode, saturation: options.saturation)
 
         let files = try PywalWriter.write(scheme, wallpaper: wallpaper, to: options.cacheDirectory, templates: options.templatesDirectory)
         var written = files.written
         var warnings = files.warnings
-        if let themes = options.apolloShellThemes {
-            do {
-                if let path = try ApolloShellTheme.write(scheme, wallpaper: wallpaper, themesDirectory: themes) {
-                    written.append(path)
-                }
-            } catch {
-                warnings.append("couldn't write the ApolloShell theme: \(error.localizedDescription)")
-            }
-        }
-
         if let paths = options.editors {
             let editors = EditorThemes.write(scheme, paths: paths)
             written += editors.written
@@ -84,5 +83,20 @@ public enum ThemeApplier {
     /// The image the current theme was made from (pywal's `wal` file), or nil.
     public static func lastApplied(cacheDirectory: String = TintPaths.walCache) -> String? {
         (try? String(contentsOfFile: cacheDirectory + "/wal", encoding: .utf8))?.trimmingWhitespace()
+    }
+
+    /// True if the current theme was made from this image as it is now: the
+    /// same path, and the file hasn't changed since. A new image written over
+    /// the old one under the same name gets a new theme.
+    public static func isCurrent(_ image: String, cacheDirectory: String = TintPaths.walCache) -> Bool {
+        guard lastApplied(cacheDirectory: cacheDirectory) == image,
+              let themed = modified(cacheDirectory + "/wal"),
+              let changed = modified(image)
+        else { return false }
+        return changed <= themed
+    }
+
+    private static func modified(_ path: String) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
     }
 }
