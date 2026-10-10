@@ -69,7 +69,25 @@ public enum SchemeBuilder {
         colors[8] = readable(backgroundLab.withLightness(backgroundLab.l + (dark ? 18 : -18)), on: background, ratio: Contrast.large, lighten: dark)
         colors[15] = foreground
 
-        return Scheme(background: background, foreground: foreground, cursor: foreground, colors: colors, mode: mode)
+        return Scheme(background: background, foreground: foreground, cursor: foreground,
+                      accent: pickAccent(palette, colors: colors), colors: colors, mode: mode)
+    }
+
+    /// The scheme's single accent. Slots 1–6 keep their ANSI hue — colour 4
+    /// is a blue even for an image with no blue in it — so this takes the slot
+    /// whose hue is closest to the colour the image shows most: the swatch
+    /// with the largest coverage × chroma. A (nearly) grey image gets colour
+    /// 7, the dim foreground. Being one of the scheme's own colours, it is
+    /// already readable on the background.
+    static func pickAccent(_ palette: Palette, colors: [Rgb]) -> Rgb {
+        // Below this a swatch is grey, however much of the image it covers.
+        let minChroma = 5.0
+
+        let strongest = palette.swatches
+            .filter { $0.lab.chroma >= minChroma }
+            .max { $0.share * $0.lab.chroma < $1.share * $1.lab.chroma }
+        guard let hue = strongest?.lab.hue else { return colors[7] }
+        return colors[1...6].min { hueDistance($0.lab.hue, hue) < hueDistance($1.lab.hue, hue) }!
     }
 
     /// Six accent colours, one per ANSI slot. The image's most colourful,

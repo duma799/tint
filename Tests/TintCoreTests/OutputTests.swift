@@ -10,6 +10,17 @@ struct OutputTests {
         #expect(TemplateRenderer.render("{color4.strip}", scheme: s, wallpaper: "/w.jpg").text == s[4].strip)
     }
 
+    @Test func theAccentIsWrittenEverywhereAndHasAPlaceholder() throws {
+        let a = s.accent.hex
+        #expect(TemplateRenderer.render("{accent} {accent.strip}", scheme: s, wallpaper: "/w.jpg").text == "\(a) \(s.accent.strip)")
+        #expect(PywalWriter.shell(s, "/w.jpg").contains("accent='\(a)'\n"))
+        #expect(PywalWriter.css(s, "/w.jpg").contains("--accent: \(a);"))
+        #expect(PywalWriter.vim(s, "/w.jpg").contains("let accent     = \"\(a)\"\n"))
+        #expect(PywalWriter.kitty(s).contains("active_border_color   \(a)\n"))
+        let root = try JSONSerialization.jsonObject(with: Data(PywalWriter.json(s, "/w.jpg").utf8)) as! [String: Any]
+        #expect((root["special"] as? [String: String])?["accent"] == a)
+    }
+
     @Test func modifiersBracesAndSpecialsRenderLikePywal() {
         let bg = s.background
         let text = TemplateRenderer.render(
@@ -76,7 +87,7 @@ struct OutputTests {
 
     @Test func apolloShellThemeUsesTheSchemeAndOnlyItsOwnTokens() throws {
         let css = ApolloShellTheme.render(s, wallpaper: "/walls/koi */ evil.jpg")
-        #expect(css.contains("--apollo-accent-color: \(s[4].hex);"))
+        #expect(css.contains("--apollo-accent-color: \(s.accent.hex);"))
         #expect(css.contains("--apollo-background-color: \(s.background.hex);"))
         #expect(css.contains("--apollo-theme-appearance: dark;"))
         #expect(!css.contains("*/ evil"))

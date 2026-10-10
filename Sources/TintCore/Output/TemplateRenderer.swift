@@ -2,7 +2,8 @@
 /// working unchanged.
 ///
 /// Syntax (Python `str.format`, as pywal uses):
-/// - `{color4}` → `#1b2233`; also `background`, `foreground`, `cursor`, `color0`–`color15`
+/// - `{color4}` → `#1b2233`; also `background`, `foreground`, `cursor`, `color0`–`color15`,
+///   and tint's own `accent` (see `Scheme`)
 /// - `{color4.strip}` → `1b2233`, `.rgb` → `27,34,51`, `.rgba` → `27,34,51,1.0`,
 ///   `.xrgba` → `1b/22/33/ff`, `.red`/`.green`/`.blue` → `0.106`
 /// - `{wallpaper}`, `{alpha}` (`100`), `{alpha.decimal}` (`1.0`)
@@ -69,6 +70,7 @@ public enum TemplateRenderer {
         case "background": color = scheme.background
         case "foreground": color = scheme.foreground
         case "cursor": color = scheme.cursor
+        case "accent": color = scheme.accent
         default:
             if name.hasPrefix("color"), let n = Int(name.dropFirst(5)), (0..<16).contains(n),
                name.dropFirst(5).allSatisfy(\.isASCII) {

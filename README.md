@@ -12,6 +12,9 @@ and runs quietly at login.
   file (Neptune…), and themes from each new one.
 - **Builds a readable 16-colour scheme**: accents matched to their terminal
   role by hue, every colour checked for contrast (WCAG).
+- **Picks one accent colour the wallpaper really has**, for bars, borders and
+  the like: `color4` stays a blue for the terminal, even for an image with no
+  blue in it, but `accent` is a forest's green or a sunset's orange.
 - **Writes pywal's files** to `~/.cache/wal`, so existing configs keep working,
   plus Ghostty, WezTerm and **ApolloShell** themes, and **Zed, VS Code,
   Antigravity and Gemini CLI** themes.
@@ -76,9 +79,13 @@ tint wallpaper -v               # print the current wallpaper, and how it was fo
 1. writes pywal's files to `~/.cache/wal`: `colors.json`, `colors`, `colors.sh`,
    `colors.css`, `colors-kitty.conf`, `colors-wal.vim` — SketchyBar configs
    reading `colors.json`, JankyBorders reading `colors.sh`, Neovim with
-   pywal.nvim all keep working — plus `colors-ghostty` and `colors-wezterm.toml`;
+   pywal.nvim all keep working — plus `colors-ghostty` and `colors-wezterm.toml`.
+   Next to pywal's colours they hold one of tint's: `accent` (`accent='#…'` in
+   `colors.sh`, `special.accent` in `colors.json`, `--accent` in `colors.css`) —
+   the slot colour (1–6) closest in hue to what covers most of the image, or
+   `color7` for a grey one;
 2. renders your pywal templates from `~/.config/wal/templates` (same syntax:
-   `{color4}`, `{color4.strip}`, `{{ }}`…);
+   `{color4}`, `{color4.strip}`, `{{ }}`…, plus `{accent}`);
 3. writes an ApolloShell theme and editor themes, for whichever are installed;
 4. reloads the apps below, if they're running;
 5. runs `~/.config/tint/hooks/post-apply` if it exists, with `TINT_WALLPAPER`,
@@ -89,7 +96,7 @@ tint wallpaper -v               # print the current wallpaper, and how it was fo
 | App | How |
 |---|---|
 | **SketchyBar** | `sketchybar --reload`, which re-runs your `sketchybarrc` |
-| **JankyBorders** | runs `~/.config/borders/bordersrc` (it should read `colors.sh`); without one, sets the active border to color4 and the inactive one to color8. Calling `borders` with options updates the running instance — no restart |
+| **JankyBorders** | runs `~/.config/borders/bordersrc` (it should read `colors.sh`); without one, sets the active border to the accent and the inactive one to color8. Calling `borders` with options updates the running instance — no restart |
 | **Ghostty** 1.2+ | sends it `SIGUSR2` (reload config). Add to its config: `config-file = ~/.cache/wal/colors-ghostty` |
 | **ApolloShell** | writes `~/Library/Application Support/ApolloShell/themes/tint.css`. Choose **tint** in Nexus → Themes once; ApolloShell re-reads the file on every change |
 | **Zed** | writes `~/.config/zed/themes/tint.json` and points your settings' `theme.dark` (or `light`) at **Tint** |

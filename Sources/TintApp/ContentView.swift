@@ -25,7 +25,7 @@ struct ContentView: View {
         .frame(minWidth: 920, minHeight: 640)
         .background(scheme.map { Color($0.background) } ?? Color(nsColor: .windowBackgroundColor), ignoresSafeAreaEdges: .all)
         .foregroundStyle(scheme.map { Color($0.foreground) } ?? Color.primary)
-        .tint(scheme.map { Color($0[4]) } ?? Color.accentColor)
+        .tint(scheme.map { Color($0.accent) } ?? Color.accentColor)
         .preferredColorScheme(scheme?.mode == .light ? .light : .dark)
         .animation(.easeInOut(duration: 0.25), value: scheme)
         .fileImporter(isPresented: $model.importing, allowedContentTypes: [.image]) { result in
@@ -263,7 +263,7 @@ struct SchemeButtonStyle: ButtonStyle {
             .padding(.vertical, 10)
             .foregroundStyle(scheme.map { Color($0.background) } ?? Color.white)
             .background(
-                scheme.map { Color($0[4]) } ?? Color.accentColor,
+                scheme.map { Color($0.accent) } ?? Color.accentColor,
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
     }

@@ -53,6 +53,37 @@ struct SchemeTests {
         #expect(Set(s.colors[1...6]).count == 6)
     }
 
+    @Test func theAccentIsTheWallpapersColourNotColour4() throws {
+        // A warm photo has no blue; colour 4 is a made-up blue, the accent isn't.
+        let warm = palette("#20150f", "#5a3a22", "#a06a3a", "#d9a066", "#f2dcc0", "#8a5a30")
+        let s = try SchemeBuilder.build(warm, mode: .dark)
+        #expect(s.accent != s[4])
+        #expect(s.accent == s[1] || s.accent == s[3], "hue \(s.accent.lab.hue)")
+    }
+
+    @Test func theAccentFollowsWhatCoversMostOfTheImage() throws {
+        func accentSlot(_ swatches: [(String, Double)]) throws -> Int? {
+            let s = try SchemeBuilder.build(Palette(swatches: swatches.map { Swatch(color: Rgb(hex: $0.0)!, share: $0.1) }), mode: .dark)
+            return s.colors.firstIndex(of: s.accent)
+        }
+        // Mostly sky with a little forest, and the other way round.
+        #expect(try accentSlot([("#4a7fd0", 0.7), ("#e8eef6", 0.2), ("#2f6a2a", 0.1)]) == 4)
+        #expect(try accentSlot([("#2f6a2a", 0.7), ("#e8eef6", 0.2), ("#4a7fd0", 0.1)]) == 2)
+    }
+
+    @Test(arguments: ThemeMode.allCases)
+    func aGreyImageGetsTheDimForegroundAsItsAccent(mode: ThemeMode) throws {
+        let s = try SchemeBuilder.build(palette("#808080", "#202020", "#d0d0d0"), mode: mode)
+        #expect(s.accent == s[7])
+    }
+
+    @Test(arguments: ThemeMode.allCases)
+    func theAccentIsReadable(mode: ThemeMode) throws {
+        let s = try SchemeBuilder.build(Self.night, mode: mode)
+        #expect(s.colors.contains(s.accent))
+        #expect(Contrast.ratio(s.accent, s.background) >= Contrast.text)
+    }
+
     @Test func saturationScalesHowColourfulTheAccentsAre() throws {
         func chroma(_ s: Scheme) -> Double { s.colors[1...6].map(\.lab.chroma).reduce(0, +) / 6 }
         let muted = chroma(try SchemeBuilder.build(Self.night, mode: .dark, saturation: 0.5))

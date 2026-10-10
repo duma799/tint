@@ -72,7 +72,7 @@ public struct SketchyBarReloader: Reloader {
 /// running instance, so there's no restart. If there's a
 /// `~/.config/borders/bordersrc` it is run — it usually reads `colors.sh` and
 /// passes the colours on, keeping your own style; otherwise the active border
-/// gets blue (color4) and the inactive one color8.
+/// gets the accent and the inactive one color8.
 public struct BordersReloader: Reloader {
     public let name = "JankyBorders"
     let bordersrc: String
@@ -87,7 +87,7 @@ public struct BordersReloader: Reloader {
             return Reloaders.script(name, bordersrc, timeout: 10, ran: "reloaded (ran bordersrc)")
         }
         return Reloaders.command(name, "borders", [
-            "active_color=0xff\(context.scheme[4].strip)",
+            "active_color=0xff\(context.scheme.accent.strip)",
             "inactive_color=0xff\(context.scheme[8].strip)",
         ])
     }
