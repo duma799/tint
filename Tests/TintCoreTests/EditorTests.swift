@@ -346,7 +346,7 @@ struct JSONCEditorTests {
         try e.remove(key)
         var expected = JSONCEditor.parse(text) as! [String: Any]
         expected.removeValue(forKey: key)
-        #expect(NSDictionary(dictionary: JSONCEditor.parse(e.text) as! [String: Any]).isEqual(to: expected), "\(e.text)")
+        #expect(try JSONCEditor.canonical(JSONCEditor.parse(e.text)!) == JSONCEditor.canonical(expected), "\(e.text)")
         #expect(!e.text.contains("\"\(key)\""))
         if text.contains("// keep") { #expect(e.text.contains("// keep") && e.text.contains("/* keep too */")) }
     }

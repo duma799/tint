@@ -92,8 +92,13 @@ struct JSONCEditor {
               let after = JSONCEditor.parse(edited) as? [String: Any]
         else { throw Failure.brokenResult }
         before.removeValue(forKey: key)
-        guard NSDictionary(dictionary: before).isEqual(to: after) else { throw Failure.brokenResult }
+        guard try JSONCEditor.canonical(before) == JSONCEditor.canonical(after) else { throw Failure.brokenResult }
         text = edited
+    }
+
+    /// A value as JSON with sorted keys, for comparing two values on any platform.
+    static func canonical(_ value: Any) throws -> Data {
+        try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .fragmentsAllowed])
     }
 
     // MARK: Scanning
