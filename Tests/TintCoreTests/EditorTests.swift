@@ -38,16 +38,31 @@ struct EditorTests {
         #expect(result.written.count == 2)
     }
 
-    @Test func vscodeKeepsOtherSettingsAndGetsTheColours() throws {
+    @Test func zedKeepsAThemeYouPickedLater() throws {
         let home = TempDir()
-        home.write("Library/Application Support/Code/User/settings.json", "{\"editor.fontSize\": 14}")
+        home.write(".config/zed/settings.json", "{\"theme\": {\"mode\": \"dark\", \"light\": \"One Light\", \"dark\": \"Tint\"}}")
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+        // Then the user switches to another theme.
+        home.write(".config/zed/settings.json", "{\"theme\": {\"mode\": \"dark\", \"light\": \"One Light\", \"dark\": \"One Dark\"}}")
+        let result = EditorThemes.write(s, paths: .init(home: home.path))
+
+        #expect(home.read(".config/zed/settings.json").contains("\"dark\": \"One Dark\""))
+        #expect(result.written == [home.file(".config/zed/themes/tint.json")])
+    }
+
+    @Test func vscodeSettingsGetNoColours() throws {
+        let home = TempDir()
+        let original = "{\"editor.fontSize\": 14}"
+        home.write("Library/Application Support/Code/User/settings.json", original)
+        home.write(".vscode/extensions/extensions.json", "[]")
         _ = EditorThemes.write(s, paths: .init(home: home.path))
 
         let settings = try json(home.file("Library/Application Support/Code/User/settings.json"))
         #expect(settings["editor.fontSize"] as? Int == 14)
-        let workbench = settings["workbench.colorCustomizations"] as! [String: String]
-        #expect(workbench["terminal.ansiBlue"] == s[4].hex)
-        #expect(settings["editor.tokenColorCustomizations"] != nil)
+        #expect(settings["workbench.colorTheme"] as? String == "Tint")
+        // Colours there would paint every other theme too.
+        #expect(settings["workbench.colorCustomizations"] == nil)
+        #expect(settings["editor.tokenColorCustomizations"] == nil)
     }
 
     @Test func settingsWithCommentsAreEditedAndKeepTheirComments() throws {
@@ -73,13 +88,10 @@ struct EditorTests {
         #expect(!text.contains("Tokyo Night"))
         let parsed = JSONCEditor.parse(text) as! [String: Any]
         #expect(parsed["editor.fontSize"] as? Int == 14)
-        #expect((parsed["workbench.colorCustomizations"] as? [String: String])?["terminal.ansiBlue"] == s[4].hex)
 
-        // Applying again replaces tint's keys instead of adding them twice.
+        // Applying again leaves the settings as they are.
         _ = EditorThemes.write(s, paths: .init(home: home.path))
-        let again = home.read("Library/Application Support/Code/User/settings.json")
-        #expect(again.components(separatedBy: "workbench.colorCustomizations").count == 2)
-        #expect(again.contains("// Шрифт + лигатуры"))
+        #expect(home.read("Library/Application Support/Code/User/settings.json") == text)
     }
 
     @Test func brokenSettingsAreLeftAloneWithAWarning() {
@@ -91,6 +103,22 @@ struct EditorTests {
         #expect(home.read("Library/Application Support/Antigravity/User/settings.json") == original)
         #expect(result.warnings.count == 1)
         #expect(result.warnings[0].hasPrefix("Antigravity"))
+    }
+
+    @Test func geminiKeepsAThemeYouPickedLater() throws {
+        let home = TempDir()
+        home.write(".gemini/settings.json", "{}")
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+        var settings = try json(home.file(".gemini/settings.json"))
+        var ui = settings["ui"] as! [String: Any]
+        ui["theme"] = "Dracula"
+        settings["ui"] = ui
+        home.write(".gemini/settings.json", String(decoding: try JSONSerialization.data(withJSONObject: settings), as: UTF8.self))
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+
+        let after = try json(home.file(".gemini/settings.json"))["ui"] as! [String: Any]
+        #expect(after["theme"] as? String == "Dracula")
+        #expect((after["customThemes"] as! [String: Any])["Tint"] != nil)
     }
 
     @Test func geminiGetsATintThemeSelected() throws {
@@ -120,39 +148,154 @@ struct EditorTests {
 
 struct VSCodeThemeTests {
     let s = testScheme
+    let settingsFile = "Library/Application Support/Code/User/settings.json"
+    let folder = ".vscode/extensions/duma799.tint-theme-1.1.0"
 
-    @Test func vscodeGetsASelectableTintThemeExtension() throws {
+    func json(_ home: TempDir, _ name: String) throws -> Any {
+        try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file(name))!)
+    }
+
+    @Test func vscodeGetsASelectableTintThemeExtensionThatItWatches() throws {
         let home = TempDir()
-        home.write("Library/Application Support/Code/User/settings.json", "{\"editor.fontSize\": 14}")
+        home.write(settingsFile, "{\"editor.fontSize\": 14}")
         home.write(".vscode/extensions/extensions.json", "[{\"identifier\": {\"id\": \"ms-python.python\"}, \"version\": \"1.0.0\"}]")
         _ = EditorThemes.write(s, paths: .init(home: home.path))
 
-        let folder = ".vscode/extensions/duma799.tint-theme-1.0.0"
-        let manifest = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file(folder + "/package.json"))!) as! [String: Any]
+        let manifest = try json(home, folder + "/package.json") as! [String: Any]
         let themes = (manifest["contributes"] as! [String: Any])["themes"] as! [[String: Any]]
         #expect(themes[0]["label"] as? String == "Tint")
         #expect(themes[0]["uiTheme"] as? String == "vs-dark")
+        // VS Code re-reads a watched theme file as soon as it changes.
+        #expect(themes[0]["_watch"] as? Bool == true)
 
-        let theme = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file(folder + "/themes/tint-color-theme.json"))!) as! [String: Any]
+        let theme = try json(home, folder + "/themes/tint-color-theme.json") as! [String: Any]
         #expect((theme["colors"] as! [String: String])["terminal.ansiBlue"] == s[4].hex)
         #expect(!(theme["tokenColors"] as! [Any]).isEmpty)
 
-        let settings = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file("Library/Application Support/Code/User/settings.json"))!) as! [String: Any]
+        let settings = try json(home, settingsFile) as! [String: Any]
         #expect(settings["workbench.colorTheme"] as? String == "Tint")
         #expect(settings["editor.fontSize"] as? Int == 14)
 
         // Registered once, next to the existing extensions; a second apply doesn't add it again.
         _ = EditorThemes.write(s, paths: .init(home: home.path))
-        let registry = try JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: home.file(".vscode/extensions/extensions.json"))!) as! [[String: Any]]
+        let registry = try json(home, ".vscode/extensions/extensions.json") as! [[String: Any]]
         let ids = registry.compactMap { ($0["identifier"] as? [String: Any])?["id"] as? String }
         #expect(ids == ["ms-python.python", "duma799.tint-theme"])
     }
 
-    @Test func withoutAnExtensionsFolderOnlyTheSettingsChange() throws {
+    @Test func aThemeYouPickedStaysPicked() throws {
         let home = TempDir()
-        home.write("Library/Application Support/Code/User/settings.json", "{}")
+        home.write(settingsFile, "{}")
+        home.write(".vscode/extensions/extensions.json", "[]")
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+        home.write(settingsFile, "{\"workbench.colorTheme\": \"Tokyo Night\"}")
         let result = EditorThemes.write(s, paths: .init(home: home.path))
-        #expect(result.written == [home.file("Library/Application Support/Code/User/settings.json")])
+
+        #expect(home.read(settingsFile) == "{\"workbench.colorTheme\": \"Tokyo Night\"}")
+        #expect(!result.written.contains(home.file(settingsFile)))
+    }
+
+    @Test func anOlderVersionOfTheThemeIsReplaced() throws {
+        let home = TempDir()
+        home.write(settingsFile, "{\"workbench.colorTheme\": \"Tokyo Night\"}")
+        let old = home.write(".vscode/extensions/duma799.tint-theme-1.0.0/package.json", "{}")
+        home.write(".vscode/extensions/extensions.json", """
+        [{"identifier": {"id": "duma799.tint-theme"}, "version": "1.0.0", "relativeLocation": "duma799.tint-theme-1.0.0"},
+         {"identifier": {"id": "ms-python.python"}, "version": "1.0.0"}]
+        """)
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+
+        #expect(!TintPaths.exists(old))
+        #expect(TintPaths.exists(home.file(folder + "/package.json")))
+        let registry = try json(home, ".vscode/extensions/extensions.json") as! [[String: Any]]
+        #expect(registry.compactMap { ($0["identifier"] as? [String: Any])?["id"] as? String } == ["duma799.tint-theme", "ms-python.python"])
+        #expect(registry[0]["version"] as? String == "1.1.0")
+        #expect(registry[0]["relativeLocation"] as? String == "duma799.tint-theme-1.1.0")
+        // Not a first install: the user's own pick stays.
+        #expect((try json(home, settingsFile) as! [String: Any])["workbench.colorTheme"] as? String == "Tokyo Night")
+    }
+
+    @Test func coloursOlderVersionsLeftInTheSettingsAreRemoved() throws {
+        let home = TempDir()
+        // tint 0.7.0's colours over every theme, a "[Tint]" section, and the user's own.
+        var workbench: [String: Any] = EditorThemes.vscodeColors(s).filter { !$0.key.hasPrefix("charts.") }
+        workbench["[Tint]"] = ["editor.background": "#010102"]
+        workbench["[One Dark Pro]"] = ["editor.background": "#282c34"]
+        workbench["statusBarItem.compactHoverBackground"] = "#123456"
+        let tokens: [String: Any] = [
+            "comments": ["foreground": "#888888"], "keywords": ["fontStyle": "bold"], "functions": [:],
+            "variables": [:], "strings": [:], "types": [:], "numbers": [:], "textMateRules": [],
+            "[Tint]": ["comments": "#606063"],
+            "[One Dark Pro]": ["comments": "#5c6370"],
+        ]
+        let settings: [String: Any] = ["workbench.colorCustomizations": workbench, "editor.tokenColorCustomizations": tokens, "editor.fontSize": 14]
+        home.write(settingsFile, String(decoding: try JSONSerialization.data(withJSONObject: settings, options: .prettyPrinted), as: UTF8.self))
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+
+        let after = try json(home, settingsFile) as! [String: Any]
+        let keptWorkbench = after["workbench.colorCustomizations"] as! [String: Any]
+        #expect(Set(keptWorkbench.keys) == ["[One Dark Pro]", "statusBarItem.compactHoverBackground"])
+        #expect(Set((after["editor.tokenColorCustomizations"] as! [String: Any]).keys) == ["[One Dark Pro]"])
+        #expect(after["editor.fontSize"] as? Int == 14)
+    }
+
+    @Test func emptiedCustomizationsGoAwayAndCommentsStay() throws {
+        let home = TempDir()
+        home.write(settingsFile, """
+        {
+            // Font
+            "editor.fontSize": 14,
+            "workbench.colorCustomizations": {
+                "[Tint]": { "editor.background": "#010102" }
+            },
+            "editor.tokenColorCustomizations": {
+                "[Tint]": { "comments": { "fontStyle": "italic", } }
+            }
+        }
+        """)
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+
+        let text = home.read(settingsFile)
+        #expect(text.contains("// Font"))
+        #expect(!text.contains("Customizations"))
+        #expect((JSONCEditor.parse(text) as? [String: Any])?["editor.fontSize"] as? Int == 14)
+    }
+
+    @Test func aFewColoursOfYourOwnAreNotMistakenForTints() throws {
+        let home = TempDir()
+        let original = "{\"workbench.colorCustomizations\": {\"editor.background\": \"#000000\", \"terminal.ansiBlue\": \"#0000ff\"}}"
+        home.write(settingsFile, original)
+        _ = EditorThemes.write(s, paths: .init(home: home.path))
+        #expect(home.read(settingsFile) == original)
+    }
+
+    @Test func theEditorTakesTheSchemesBackgroundAndItsPanelsKeepItsColour() {
+        let workbench = EditorThemes.vscodeColors(s)
+        #expect(workbench["editor.background"] == s.background.hex)
+        #expect(workbench["terminal.background"] == s.background.hex)
+        let background = s.background.lab
+        for key in ["sideBar.background", "tab.inactiveBackground", "panel.background", "editor.lineHighlightBackground"] {
+            let panel = Rgb(hex: workbench[key]!)!.lab
+            #expect(panel.l > background.l, "\(key) is lighter on a dark theme")
+            #expect(abs(panel.hue - background.hue) < 15, "\(key) keeps the background's hue")
+        }
+    }
+
+    @Test(arguments: ThemeMode.allCases)
+    func everyColourIsAHexColour(mode: ThemeMode) throws {
+        let scheme = try SchemeBuilder.build(SchemeTests.night, mode: mode)
+        let hex = try Regex("^#[0-9a-f]{6}([0-9a-f]{2})?$")
+        for (key, value) in EditorThemes.vscodeColors(scheme) {
+            #expect(value.wholeMatch(of: hex) != nil, "\(key): \(value)")
+        }
+    }
+
+    @Test func withoutAnExtensionsFolderNothingChanges() throws {
+        let home = TempDir()
+        home.write(settingsFile, "{}")
+        let result = EditorThemes.write(s, paths: .init(home: home.path))
+        #expect(result.written.isEmpty)
+        #expect(home.read(settingsFile) == "{}")
     }
 }
 
@@ -188,5 +331,40 @@ struct JSONCEditorTests {
         let parsed = JSONCEditor.parse(e.text) as! [String: Any]
         #expect((parsed["c"] as? [String: Bool])?["new"] == true)
         #expect(parsed["z"] as? Int == 3)
+    }
+
+    @Test(arguments: [
+        ("{\n    \"a\": 1,\n    \"b\": 2,\n    \"c\": 3\n}", "b"),
+        ("{\n    \"a\": 1,\n    \"b\": 2\n}", "b"),
+        ("{\n    \"b\": {\"x\": [1, {\"y\": 2}]}, // about b\n    \"a\": 1\n}", "b"),
+        ("{\"a\": 1, \"b\": 2}", "a"),
+        ("{\"b\": 2}", "b"),
+        ("{\n    // keep\n    \"a\": 1, /* keep too */\n    \"b\": \"}\",\n}", "b"),
+    ])
+    func removesAKeyAndNothingElse(text: String, key: String) throws {
+        var e = JSONCEditor(text)
+        try e.remove(key)
+        var expected = JSONCEditor.parse(text) as! [String: Any]
+        expected.removeValue(forKey: key)
+        #expect(NSDictionary(dictionary: JSONCEditor.parse(e.text) as! [String: Any]).isEqual(to: expected), "\(e.text)")
+        #expect(!e.text.contains("\"\(key)\""))
+        if text.contains("// keep") { #expect(e.text.contains("// keep") && e.text.contains("/* keep too */")) }
+    }
+
+    @Test func removingAMissingKeyChangesNothing() throws {
+        var e = JSONCEditor("{\"a\": 1}")
+        try e.remove("b")
+        #expect(e.text == "{\"a\": 1}")
+    }
+
+    @Test func windowsLineEndingsAreReadAndEdited() throws {
+        let text = "{\r\n    // a comment\r\n    \"a\": 1,\r\n    \"b\": 2\r\n}\r\n"
+        #expect((JSONCEditor.parse(text) as? [String: Any])?["b"] as? Int == 2)
+        var e = JSONCEditor(text)
+        try e.set("a", 5)
+        try e.remove("b")
+        let parsed = JSONCEditor.parse(e.text) as! [String: Any]
+        #expect(parsed.count == 1 && parsed["a"] as? Int == 5)
+        #expect(e.text.contains("// a comment"))
     }
 }

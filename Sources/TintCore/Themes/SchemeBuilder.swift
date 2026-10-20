@@ -44,7 +44,7 @@ public enum SchemeBuilder {
         let tint = overallTint(palette)
         let backgroundL = dark ? min(darkest.l, 12) : max(lightest.l, 94)
         let backgroundChroma = min(tint.chroma * 0.6, dark ? 14 : 8, max(backgroundL, 8))
-        let backgroundLab = Lab.lch(l: backgroundL, chroma: backgroundChroma, hue: tint.hue)
+        let backgroundLab = Lab.lch(l: backgroundL, chroma: backgroundChroma, hue: tint.hue).inGamut()
         let background = backgroundLab.rgb
 
         let foregroundLab = Lab.lch(
@@ -141,12 +141,14 @@ public enum SchemeBuilder {
     }
 
     /// Moves `color` lighter (dark themes) or darker (light themes) until it
-    /// reaches `ratio` against the background. Hue and chroma are kept, so it's
-    /// the same colour, just legible.
+    /// reaches `ratio` against the background. Hue is kept, and chroma too
+    /// where sRGB can show it (more saturation than a screen has is reduced,
+    /// not clamped per channel, which would change the hue), so it's the same
+    /// colour, just legible.
     static func readable(_ color: Lab, on background: Rgb, ratio: Double, lighten: Bool) -> Rgb {
         var current = color.withLightness(min(max(color.l, 0), 100))
         for _ in 0...100 {
-            let rgb = current.rgb
+            let rgb = current.inGamut().rgb
             if Contrast.ratio(rgb, background) >= ratio { return rgb }
             let l = current.l + (lighten ? 1 : -1)
             if l < 0 || l > 100 { break }

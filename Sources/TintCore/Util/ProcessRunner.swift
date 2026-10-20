@@ -76,9 +76,20 @@ public enum ProcessRunner {
         return finished.wait(timeout: .now() + timeout) == .timedOut ? nil : process.terminationStatus
     }
 
-    /// True if a process with exactly this name is running (`pgrep -x`).
-    public static func isRunning(_ name: String) -> Bool {
-        (try? run("pgrep", ["-x", name]))?.succeeded ?? false
+    /// True if a process with exactly this name is running.
+    public static func isRunning(_ name: String) -> Bool { !pids(name).isEmpty }
+
+    /// The processes with exactly this name (`pgrep -x`). On macOS with `-a`:
+    /// pgrep otherwise skips its own ancestors, and `tint apply` typed into
+    /// Ghostty runs *inside* Ghostty — which would then never be found.
+    public static func pids(_ name: String) -> [Int32] {
+        #if os(macOS)
+        let arguments = ["-a", "-x", name]
+        #else
+        let arguments = ["-x", name]
+        #endif
+        guard let result = try? run("pgrep", arguments), result.succeeded else { return [] }
+        return result.stdout.split(whereSeparator: \.isNewline).compactMap { Int32($0) }
     }
 
     private static func resolve(_ program: String) throws -> String {

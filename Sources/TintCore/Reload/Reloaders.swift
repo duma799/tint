@@ -6,6 +6,9 @@ public struct ReloadContext: Sendable {
     public var cacheDirectory: String
 }
 
+/// The running processes with exactly this name; `ProcessRunner.pids`, or a stand-in in tests.
+public typealias ProcessLookup = @Sendable (String) -> [Int32]
+
 /// What happened to one app. `skipped` means "not installed / not running" — not an error.
 public struct ReloadResult: Sendable {
     public var name: String
@@ -59,11 +62,12 @@ public enum Reloaders {
 /// reads `~/.cache/wal` picks up the new colours.
 public struct SketchyBarReloader: Reloader {
     public let name = "SketchyBar"
+    let processes: ProcessLookup
 
-    public init() {}
+    public init(processes: @escaping ProcessLookup = ProcessRunner.pids) { self.processes = processes }
 
     public func reload(_ context: ReloadContext) -> ReloadResult {
-        guard ProcessRunner.isRunning("sketchybar") else { return .skip(name, "not running") }
+        guard !processes("sketchybar").isEmpty else { return .skip(name, "not running") }
         return Reloaders.command(name, "sketchybar", ["--reload"])
     }
 }
@@ -76,13 +80,17 @@ public struct SketchyBarReloader: Reloader {
 public struct BordersReloader: Reloader {
     public let name = "JankyBorders"
     let bordersrc: String
+    let processes: ProcessLookup
 
     public static var defaultBordersrc: String { TintPaths.home + "/.config/borders/bordersrc" }
 
-    public init(bordersrc: String = BordersReloader.defaultBordersrc) { self.bordersrc = bordersrc }
+    public init(bordersrc: String = BordersReloader.defaultBordersrc, processes: @escaping ProcessLookup = ProcessRunner.pids) {
+        self.bordersrc = bordersrc
+        self.processes = processes
+    }
 
     public func reload(_ context: ReloadContext) -> ReloadResult {
-        guard ProcessRunner.isRunning("borders") else { return .skip(name, "not running") }
+        guard !processes("borders").isEmpty else { return .skip(name, "not running") }
         if TintPaths.exists(bordersrc) {
             return Reloaders.script(name, bordersrc, timeout: 10, ran: "reloaded (ran bordersrc)")
         }
@@ -100,6 +108,7 @@ public struct GhosttyReloader: Reloader {
     public static let themeFile = "colors-ghostty"
     public let name = "Ghostty"
     let configFiles: [String]
+    let processes: ProcessLookup
 
     public static var defaultConfigFiles: [String] {
         let env = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"]
@@ -108,7 +117,10 @@ public struct GhosttyReloader: Reloader {
         return [xdg + "/config", xdg + "/config.ghostty", support + "/config", support + "/config.ghostty"]
     }
 
-    public init(configFiles: [String] = GhosttyReloader.defaultConfigFiles) { self.configFiles = configFiles }
+    public init(configFiles: [String] = GhosttyReloader.defaultConfigFiles, processes: @escaping ProcessLookup = ProcessRunner.pids) {
+        self.configFiles = configFiles
+        self.processes = processes
+    }
 
     /// True if some Ghostty config mentions tint's theme file.
     public func usesTintTheme() -> Bool {
@@ -116,11 +128,15 @@ public struct GhosttyReloader: Reloader {
     }
 
     public func reload(_ context: ReloadContext) -> ReloadResult {
-        guard ProcessRunner.isRunning("ghostty") else { return .skip(name, "not running") }
+        let pids = processes("ghostty")
+        guard !pids.isEmpty else { return .skip(name, "not running") }
         guard usesTintTheme() else {
             return .skip(name, "add `config-file = ~/.cache/wal/\(GhosttyReloader.themeFile)` to your Ghostty config to theme it")
         }
-        return Reloaders.command(name, "pkill", ["-USR2", "-x", "ghostty"])
+        // Signalled directly, not with pkill: pkill can't include its own
+        // ancestors, and the Ghostty that tint was typed into is one.
+        let failed = pids.filter { kill($0, SIGUSR2) != 0 }
+        return failed.isEmpty ? .done(name, "reloaded") : .fail(name, "couldn't signal ghostty (pid \(failed.map(String.init).joined(separator: ", ")))")
     }
 }
 

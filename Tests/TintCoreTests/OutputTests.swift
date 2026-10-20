@@ -73,21 +73,4 @@ struct OutputTests {
         #expect(wezterm.contains("ansi = [\"\(s[0].hex)\", "))
         #expect(wezterm.contains("brights = [\"\(s[8].hex)\", "))
     }
-
-    @Test func apolloShellThemeUsesTheSchemeAndOnlyItsOwnTokens() throws {
-        let css = ApolloShellTheme.render(s, wallpaper: "/walls/koi */ evil.jpg")
-        #expect(css.contains("--apollo-accent-color: \(s[4].hex);"))
-        #expect(css.contains("--apollo-background-color: \(s.background.hex);"))
-        #expect(css.contains("--apollo-theme-appearance: dark;"))
-        #expect(!css.contains("*/ evil"))
-        let declarations = css.split(separator: "\n").filter { $0.contains(":") && $0.hasPrefix("  ") }
-        #expect(declarations.allSatisfy { $0.hasPrefix("  --apollo-") })
-    }
-
-    @Test func apolloShellThemeIsWrittenOnlyWhenApolloShellIsInstalled() throws {
-        let dir = TempDir()
-        #expect(try ApolloShellTheme.write(s, wallpaper: "/w.jpg", themesDirectory: dir.file("ApolloShell/themes")) == nil)
-        try FileManager.default.createDirectory(atPath: dir.file("ApolloShell"), withIntermediateDirectories: true)
-        #expect(try ApolloShellTheme.write(s, wallpaper: "/w.jpg", themesDirectory: dir.file("ApolloShell/themes")) == dir.file("ApolloShell/themes/tint.css"))
-    }
 }

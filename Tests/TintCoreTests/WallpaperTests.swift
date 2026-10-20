@@ -103,6 +103,23 @@ struct WatcherTests {
         #expect(box.changes == ["/b.jpg"])
     }
 
+    @Test func aNewImageWrittenOverTheOldOneIsAChange() {
+        let dir = TempDir()
+        let path = dir.write("wall.jpg", "first")
+        let box = Box()
+        box.value = path
+        let watcher = WallpaperWatcher(directories: []) { box.value }
+        watcher.onChange = { box.changes.append($0) }
+        watcher.start()
+        defer { watcher.stop() }
+
+        watcher.checkNow() // untouched
+        dir.write("wall.jpg", "the second image")
+        watcher.checkNow()
+
+        #expect(box.changes == [path])
+    }
+
     @Test func aBurstOfEventsLeadsToOneCheck() async throws {
         let box = Box()
         box.value = "/a.jpg"

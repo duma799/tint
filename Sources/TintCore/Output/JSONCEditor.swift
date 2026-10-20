@@ -35,7 +35,7 @@ struct JSONCEditor {
         let rendered = try render(value, indent: indent)
 
         let edited: String
-        if let range = valueRange(ofTopLevelKey: key, in: chars) {
+        if let range = member(key, in: chars)?.value {
             edited = String(chars[..<range.lowerBound]) + rendered + String(chars[range.upperBound...])
         } else {
             guard let close = topLevelClose(chars) else { throw Failure.notAnObject }
@@ -51,6 +51,48 @@ struct JSONCEditor {
 
         // Never write something that no longer reads back as the same kind of file.
         guard JSONCEditor.parse(edited) is [String: Any] else { throw Failure.brokenResult }
+        text = edited
+    }
+
+    /// Removes top-level `key` with its value, its comma, and its line if
+    /// nothing else is on it. Nothing happens if the key isn't there.
+    mutating func remove(_ key: String) throws {
+        let chars = Array(text)
+        guard let member = member(key, in: chars) else { return }
+        var start = member.key, end = member.value.upperBound
+        var comma: Int?
+        if let next = firstSignificant(chars, from: end), chars[next] == "," {
+            end = next + 1
+        } else if let previous = lastSignificant(chars, before: start), chars[previous] == "," {
+            comma = previous // the last entry: the comma before it goes instead
+        }
+
+        // The whole line, when the entry has it to itself (a comment after it included).
+        var lineStart = start
+        while lineStart > 0, chars[lineStart - 1] == " " || chars[lineStart - 1] == "\t" { lineStart -= 1 }
+        if lineStart == 0 || chars[lineStart - 1].isNewline {
+            var lineEnd = end
+            while lineEnd < chars.count, chars[lineEnd] == " " || chars[lineEnd] == "\t" { lineEnd += 1 }
+            if lineEnd + 1 < chars.count, chars[lineEnd] == "/", chars[lineEnd + 1] == "/" {
+                while lineEnd < chars.count, !chars[lineEnd].isNewline { lineEnd += 1 }
+            }
+            if lineEnd == chars.count || chars[lineEnd].isNewline {
+                start = lineStart
+                end = min(lineEnd + 1, chars.count)
+            }
+        }
+
+        var kept = chars
+        kept.removeSubrange(start..<end)
+        if let comma { kept.remove(at: comma) }
+        let edited = String(kept)
+
+        // Exactly the same settings, less that one key.
+        guard var before = JSONCEditor.parse(text) as? [String: Any],
+              let after = JSONCEditor.parse(edited) as? [String: Any]
+        else { throw Failure.brokenResult }
+        before.removeValue(forKey: key)
+        guard NSDictionary(dictionary: before).isEqual(to: after) else { throw Failure.brokenResult }
         text = edited
     }
 
@@ -80,7 +122,7 @@ struct JSONCEditor {
                 out.append(c)
                 i += 1
             } else if c == "/", i + 1 < chars.count, chars[i + 1] == "/" {
-                while i < chars.count, chars[i] != "\n" { i += 1 }
+                while i < chars.count, !chars[i].isNewline { i += 1 }
             } else if c == "/", i + 1 < chars.count, chars[i + 1] == "*" {
                 i += 2
                 while i + 1 < chars.count, !(chars[i] == "*" && chars[i + 1] == "/") { i += 1 }
@@ -92,7 +134,7 @@ struct JSONCEditor {
                 while j < chars.count {
                     if chars[j].isWhitespace { j += 1; continue }
                     if chars[j] == "/", j + 1 < chars.count, chars[j + 1] == "/" {
-                        while j < chars.count, chars[j] != "\n" { j += 1 }
+                        while j < chars.count, !chars[j].isNewline { j += 1 }
                         continue
                     }
                     if chars[j] == "/", j + 1 < chars.count, chars[j + 1] == "*" {
@@ -121,7 +163,7 @@ struct JSONCEditor {
             if chars[i].isWhitespace {
                 i += 1
             } else if chars[i] == "/", i + 1 < chars.count, chars[i + 1] == "/" {
-                while i < chars.count, chars[i] != "\n" { i += 1 }
+                while i < chars.count, !chars[i].isNewline { i += 1 }
             } else if chars[i] == "/", i + 1 < chars.count, chars[i + 1] == "*" {
                 i += 2
                 while i + 1 < chars.count, !(chars[i] == "*" && chars[i + 1] == "/") { i += 1 }
@@ -147,7 +189,7 @@ struct JSONCEditor {
                 continue
             }
             if c == "/", i + 1 < chars.count, chars[i + 1] == "/" {
-                while i < chars.count, chars[i] != "\n" { i += 1 }
+                while i < chars.count, !chars[i].isNewline { i += 1 }
                 continue
             }
             if c == "/", i + 1 < chars.count, chars[i + 1] == "*" {
@@ -169,9 +211,10 @@ struct JSONCEditor {
         return i + 1
     }
 
-    /// The span of the value of a key directly inside the top-level object.
-    private func valueRange(ofTopLevelKey key: String, in chars: [Character]) -> Range<Int>? {
-        var found: Range<Int>?
+    /// Where a key directly inside the top-level object starts (its opening
+    /// quote), and the span of its value.
+    private func member(_ key: String, in chars: [Character]) -> (key: Int, value: Range<Int>)? {
+        var found: (key: Int, value: Range<Int>)?
         walk(chars) { i, depth, isString in
             guard isString, depth == 1 else { return true }
             let end = stringEnd(chars, i)
@@ -180,7 +223,7 @@ struct JSONCEditor {
                   let colon = firstSignificant(chars, from: end), chars[colon] == ":",
                   let start = firstSignificant(chars, from: colon + 1)
             else { return true }
-            found = start..<valueEnd(chars, start)
+            found = (i, start..<valueEnd(chars, start))
             return false
         }
         return found
@@ -206,7 +249,7 @@ struct JSONCEditor {
             return end
         default:
             var i = start
-            while i < chars.count, !",}\n".contains(chars[i]), !(chars[i] == "/" && i + 1 < chars.count && "/*".contains(chars[i + 1])) {
+            while i < chars.count, !",}".contains(chars[i]), !chars[i].isNewline, !(chars[i] == "/" && i + 1 < chars.count && "/*".contains(chars[i + 1])) {
                 i += 1
             }
             while i > start, chars[i - 1].isWhitespace { i -= 1 }
@@ -237,7 +280,7 @@ struct JSONCEditor {
 
     /// The file's own indent unit (the leading whitespace of its first indented key), else 4 spaces.
     private func detectIndent(_ chars: [Character]) -> String {
-        for line in String(chars).split(separator: "\n") {
+        for line in String(chars).split(whereSeparator: \.isNewline) {
             let leading = line.prefix { $0 == " " || $0 == "\t" }
             if !leading.isEmpty, line.dropFirst(leading.count).first == "\"" { return String(leading) }
         }

@@ -33,7 +33,6 @@ public enum Doctor {
         checks.append(borders())
         checks.append(ghostty())
         checks.append(wezterm())
-        checks.append(apolloShell())
         checks.append(editors())
         checks.append(templates())
         checks.append(hook())
@@ -91,16 +90,6 @@ public enum Doctor {
         return uses
             ? Check(name: "WezTerm", status: .ok, detail: "uses tint's scheme — reloads itself when it changes")
             : Check(name: "WezTerm", status: .warning, detail: "load ~/.cache/wal/colors-wezterm.toml in wezterm.lua (see the README)")
-    }
-
-    static func apolloShell() -> Check {
-        let themes = TintPaths.apolloShellThemes
-        guard TintPaths.isDirectory((themes as NSString).deletingLastPathComponent) else {
-            return Check(name: "ApolloShell", status: .info, detail: "not installed")
-        }
-        return TintPaths.exists(themes + "/" + ApolloShellTheme.fileName)
-            ? Check(name: "ApolloShell", status: .ok, detail: "tint.css is written on every apply — pick \"tint\" in Nexus → Themes")
-            : Check(name: "ApolloShell", status: .warning, detail: "installed; run `tint apply` to write its tint theme")
     }
 
     static func editors() -> Check {

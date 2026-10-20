@@ -48,6 +48,12 @@ public struct Lab: Hashable, Sendable {
 
     /// Back to sRGB. Colours outside the sRGB gamut are clamped.
     public var rgb: Rgb {
+        let (r, g, bl) = linearRgb
+        return Rgb(Lab.toByte(r), Lab.toByte(g), Lab.toByte(bl))
+    }
+
+    /// Linear-light sRGB channels, unclamped: outside 0...1 means out of gamut.
+    private var linearRgb: (Double, Double, Double) {
         let fy = (l + 16) / 116
         let fx = fy + a / 500
         let fz = fy - b / 200
@@ -56,10 +62,29 @@ public struct Lab: Hashable, Sendable {
         let y = Lab.yn * Lab.fInverse(fy)
         let z = Lab.zn * Lab.fInverse(fz)
 
-        let r = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z
-        let g = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z
-        let bl = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z
-        return Rgb(Lab.toByte(r), Lab.toByte(g), Lab.toByte(bl))
+        return (
+            3.2404542 * x - 1.5371385 * y - 0.4985314 * z,
+            -0.9692660 * x + 1.8760108 * y + 0.0415560 * z,
+            0.0556434 * x - 0.2040259 * y + 1.0572252 * z)
+    }
+
+    /// True if sRGB can show this colour exactly.
+    public var isInGamut: Bool {
+        let (r, g, b) = linearRgb
+        return [r, g, b].allSatisfy { $0 >= -0.0005 && $0 <= 1.0005 }
+    }
+
+    /// The same lightness and hue, with chroma lowered just enough to fit in
+    /// sRGB. Clamping the channels instead would shift the hue: a deep navy
+    /// would turn purple, a dark olive brown.
+    public func inGamut() -> Lab {
+        if isInGamut { return self }
+        var low = 0.0, high = chroma
+        for _ in 0..<24 {
+            let mid = (low + high) / 2
+            if withMaxChroma(mid).isInGamut { low = mid } else { high = mid }
+        }
+        return withMaxChroma(low)
     }
 
     /// Squared CIE76 ΔE. Cheaper than `distance(to:)` when only comparing.
