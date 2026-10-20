@@ -8,15 +8,16 @@ cask "tint-app" do
   desc "Pick a wallpaper, preview its colour scheme, tweak it and apply it"
   homepage "https://github.com/duma799/tint"
 
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
 
   app "Tint.app"
 
   # Unless the release was signed with a Developer ID and notarized, the app
   # is signed ad hoc and macOS would refuse to open a downloaded copy.
   # Homebrew verified the checksum above; for a notarized app this is a no-op.
-  postflight do
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Tint.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args:           ["-dr", "com.apple.quarantine", "{{appdir}}/Tint.app"],
+                          writable_paths: ["{{appdir}}/Tint.app"]
   end
 
   zap trash: "~/.config/tint/settings.json"

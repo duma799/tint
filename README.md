@@ -13,8 +13,8 @@ and runs quietly at login.
 - **Builds a readable 16-colour scheme**: accents matched to their terminal
   role by hue, every colour checked for contrast (WCAG).
 - **Writes pywal's files** to `~/.cache/wal`, so existing configs keep working,
-  plus Ghostty, WezTerm and **ApolloShell** themes, and **Zed, VS Code,
-  Antigravity and Gemini CLI** themes.
+  plus Ghostty and WezTerm themes, and **Zed, VS Code, Antigravity and
+  Gemini CLI** themes.
 - **Follows macOS dark/light mode** if you like (`--mode system`), re-theming
   the moment macOS switches.
 - **Reloads SketchyBar, JankyBorders and Ghostty** itself, then runs your hook.
@@ -79,7 +79,7 @@ tint wallpaper -v               # print the current wallpaper, and how it was fo
    pywal.nvim all keep working — plus `colors-ghostty` and `colors-wezterm.toml`;
 2. renders your pywal templates from `~/.config/wal/templates` (same syntax:
    `{color4}`, `{color4.strip}`, `{{ }}`…);
-3. writes an ApolloShell theme and editor themes, for whichever are installed;
+3. writes editor themes, for whichever editors are installed;
 4. reloads the apps below, if they're running;
 5. runs `~/.config/tint/hooks/post-apply` if it exists, with `TINT_WALLPAPER`,
    `TINT_MODE` and `TINT_CACHE` set — for anything else (editor themes…).
@@ -91,10 +91,13 @@ tint wallpaper -v               # print the current wallpaper, and how it was fo
 | **SketchyBar** | `sketchybar --reload`, which re-runs your `sketchybarrc` |
 | **JankyBorders** | runs `~/.config/borders/bordersrc` (it should read `colors.sh`); without one, sets the active border to color4 and the inactive one to color8. Calling `borders` with options updates the running instance — no restart |
 | **Ghostty** 1.2+ | sends it `SIGUSR2` (reload config). Add to its config: `config-file = ~/.cache/wal/colors-ghostty` |
-| **ApolloShell** | writes `~/Library/Application Support/ApolloShell/themes/tint.css`. Choose **tint** in Nexus → Themes once; ApolloShell re-reads the file on every change |
 | **Zed** | writes `~/.config/zed/themes/tint.json` and points your settings' `theme.dark` (or `light`) at **Tint** |
-| **VS Code**, **Antigravity** | installs a **Tint** colour theme (a tiny local extension in `~/.vscode/extensions`) and selects it, and puts the same colours in `workbench.colorCustomizations` so they change instantly, no reload. Only tint's keys change: every other setting, and your comments and layout, stay as they are |
-| **Gemini CLI** | adds and selects a **Tint** custom theme in `~/.gemini/settings.json` |
+| **VS Code**, **Antigravity** | installs a **Tint** colour theme (a tiny local extension in `~/.vscode/extensions`) that the editor watches, so a new wallpaper re-colours it instantly, no reload. Nothing goes in `workbench.colorCustomizations`, so any other theme you pick looks like itself (colours tint 0.6–0.7 left there are removed; your own stay, and so do your comments and layout) |
+| **Gemini CLI** | adds a **Tint** custom theme to `~/.gemini/settings.json` |
+
+Each editor gets **Tint** selected once, when tint first adds it. Pick another
+theme later and it stays picked: tint keeps the Tint theme up to date for when
+you come back to it.
 | **WezTerm** | nothing to send — it reloads when a watched file changes. In `wezterm.lua`: |
 
 ```lua
@@ -189,7 +192,7 @@ Sources/
     Palettes/        k-means clustering, palette extraction
     Imaging/         ImageIO decoding (HEIC included)
     Themes/          SchemeBuilder: palette → readable 16-colour scheme
-    Output/          pywal files, templates, Ghostty/WezTerm/ApolloShell themes
+    Output/          pywal files, templates, Ghostty/WezTerm/editor themes
     Reload/          SketchyBar, JankyBorders, Ghostty, the hook
     Wallpapers/      FSEvents watcher, wallpaper lookup and setting
     Service/         the launchd agent

@@ -38,7 +38,7 @@ struct Watch: ParsableCommand {
             if apply {
                 // Something else (`tint apply -w`, the app) already themed from
                 // this image, maybe with other options: keep that.
-                if ThemeApplier.lastApplied() == path {
+                if ThemeApplier.isCurrent(path) {
                     Terminal.log("already themed from it")
                     return
                 }
@@ -60,10 +60,16 @@ struct Watch: ParsableCommand {
         Appearance.observer = DistributedNotificationCenter.default().addObserver(
             forName: SystemAppearance.changedNotification, object: nil, queue: nil
         ) { _ in
-            let options = ApplyOptions.resolved(mode: mode, saturation: saturation)
-            guard apply, !Pause.isPaused, options.mode == .system, let path = ThemeApplier.lastApplied() else { return }
-            Terminal.log("macOS switched to \(SystemAppearance.isDark() ? "dark" : "light") mode")
-            watcher.queue.async { _ = Apply.run(path, options, compact: true) }
+            guard apply else { return }
+            // On the watcher's queue, after any apply already waiting there: the
+            // image is read then, so a wallpaper change being applied right now
+            // isn't overwritten with a re-theme of the one before it.
+            watcher.queue.async {
+                let options = ApplyOptions.resolved(mode: mode, saturation: saturation)
+                guard !Pause.isPaused, options.mode == .system, let path = ThemeApplier.lastApplied() else { return }
+                Terminal.log("macOS switched to \(SystemAppearance.isDark() ? "dark" : "light") mode")
+                _ = Apply.run(path, options, compact: true)
+            }
         }
         #endif
         let what = apply ? "applying a theme on each change" : "preview only (--no-apply)"

@@ -196,7 +196,11 @@ final class AppModel {
         defer { busy = false }
         status = "Applying…"
 
-        let settings = TintSettings(mode: mode, saturation: roundedSaturation)
+        // Only the mode and saturation are the window's: the chosen display stays.
+        var saved = TintSettings.load()
+        saved.mode = mode
+        saved.saturation = roundedSaturation
+        let settings = saved
         let setWallpaper = setAsWallpaper && canSetWallpaper
         do {
             let result = try await Task.detached {
